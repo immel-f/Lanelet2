@@ -19,12 +19,6 @@ OrientedRect getRotatedRect(const BasicPoint3d& center, double extentLongitudina
 LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPoint2d& center,
                                     double extentLongitudinal, double extentLateral);
 
-inline bool isRoadBorder(const ConstLineString3d& lstring) {
-  Attribute type = lstring.attributeOr(AttributeName::Type, "");
-  return type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||
-         type == AttributeValueString::Fence;
-}
-
 inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
   Attribute type = lString.attributeOr(AttributeName::Type, "");
   if (type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||

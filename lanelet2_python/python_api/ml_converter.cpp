@@ -186,7 +186,6 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       (arg("center"), arg("extentLongitudinal"), arg("extentLateral"), arg("yaw"), arg("from2dPos")));
   def("extractSubmap", &extractSubmap,
       (arg("laneletMap"), arg("center"), arg("extentLongitudinal"), arg("extentLateral")));
-  def("isRoadBorder", &isRoadBorder, (arg("lstring")));
   def("bdTypeToEnum", &bdTypeToEnum, (arg("lstring")));
   def("teTypeToEnum", &teTypeToEnum, (arg("te")));
   def("resampleLineString", &resampleLineString, (arg("polyline"), arg("nPoints")));

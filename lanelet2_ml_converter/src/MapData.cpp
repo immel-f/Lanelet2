@@ -8,7 +8,8 @@ namespace ml_converter {
 using namespace internal;
 
 LaneDataPtr LaneData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                            traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                            traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
+                            bool untaggedDrivableAreaMode) {
   LaneDataPtr data = std::make_shared<LaneData>();
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
@@ -16,6 +17,12 @@ LaneDataPtr LaneData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing
   data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->updateAssociatedCpdInstanceIndices();
   return data;
+}
+
+inline bool isRoadBorder(const ConstLineString3d& lstring) {
+  Attribute type = lstring.attributeOr(AttributeName::Type, "");
+  return type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||
+         type == AttributeValueString::Fence;
 }
 
 void LaneData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
@@ -325,7 +332,8 @@ void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
 
 void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                                      lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
+                                     bool untaggedDrivableAreaMode) {
   std::vector<CompoundElsList> compoundedBordersAndDividers;
   std::map<Id, size_t> elInsertIdx;
 
