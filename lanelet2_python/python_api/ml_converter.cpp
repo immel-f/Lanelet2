@@ -287,16 +287,11 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
                  (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"), arg("ignoreMapElevation") = false))
             .staticmethod("build")
             .def("processAll", &LaneData::processAll)
-            .add_property("roadBorders",
-                          make_function(&LaneData::roadBorders, return_value_policy<copy_const_reference>()))
-            .add_property("laneDividers",
-                          make_function(&LaneData::laneDividers, return_value_policy<copy_const_reference>()))
-            .add_property("compoundRoadBorders",
-                          make_function(&LaneData::compoundRoadBorders, return_value_policy<copy_const_reference>()))
-            .add_property("compoundLaneDividers",
-                          make_function(&LaneData::compoundLaneDividers, return_value_policy<copy_const_reference>()))
-            .add_property("compoundCenterlines",
-                          make_function(&LaneData::compoundCenterlines, return_value_policy<copy_const_reference>()))
+            .add_property("roadBorders", make_function(&LaneData::roadBorders))
+            .add_property("laneDividers", make_function(&LaneData::laneDividers))
+            .add_property("compoundRoadBorders", make_function(&LaneData::compoundRoadBorders))
+            .add_property("compoundLaneDividers", make_function(&LaneData::compoundLaneDividers))
+            .add_property("compoundCenterlines", make_function(&LaneData::compoundCenterlines))
             .add_property("validRoadBorders", &LaneData::validRoadBorders)
             .add_property("validLaneDividers", &LaneData::validLaneDividers)
             .add_property("validCompoundRoadBorders", &LaneData::validCompoundRoadBorders)

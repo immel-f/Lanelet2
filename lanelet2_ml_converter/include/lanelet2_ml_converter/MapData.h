@@ -102,19 +102,21 @@ class LaneData {
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                   double roll = 0);
 
-  const LaneLineStringInstances& roadBorders() { return roadBorders_; }
-  const LaneLineStringInstances& laneDividers() { return laneDividers_; }
+  // Road borders (LineStringType::RoadBorder)
+  LaneLineStringInstances roadBorders() const;
+  // Lane dividers (LineStringType::Dashed, Solid, Mixed, Virtual)
+  LaneLineStringInstances laneDividers() const;
 
-  const CompoundLaneLineStringInstanceList& compoundRoadBorders() { return compoundRoadBorders_; }
-  const CompoundLaneLineStringInstanceList& compoundLaneDividers() { return compoundLaneDividers_; }
-  const CompoundLaneLineStringInstanceList& compoundCenterlines() { return compoundCenterlines_; }
+  CompoundLaneLineStringInstanceList compoundRoadBorders() const;
+  CompoundLaneLineStringInstanceList compoundLaneDividers() const;
+  CompoundLaneLineStringInstanceList compoundCenterlines() const;
 
-  LaneLineStringInstances validRoadBorders() { return getValidElements(roadBorders_); }
-  LaneLineStringInstances validLaneDividers() { return getValidElements(laneDividers_); }
+  LaneLineStringInstances validRoadBorders() const;
+  LaneLineStringInstances validLaneDividers() const;
 
-  CompoundLaneLineStringInstanceList validCompoundRoadBorders() { return getValidElements(compoundRoadBorders_); }
-  CompoundLaneLineStringInstanceList validCompoundLaneDividers() { return getValidElements(compoundLaneDividers_); }
-  CompoundLaneLineStringInstanceList validCompoundCenterlines() { return getValidElements(compoundCenterlines_); }
+  CompoundLaneLineStringInstanceList validCompoundRoadBorders() const;
+  CompoundLaneLineStringInstanceList validCompoundLaneDividers() const;
+  CompoundLaneLineStringInstanceList validCompoundCenterlines() const;
 
   CompoundLaneLineStringInstanceList associatedCpdRoadBorders(
       Id mapId);  // get features associated to map element with id
@@ -157,12 +159,10 @@ class LaneData {
   CompoundLaneLineStringInstancePtr computeCompoundCenterline(const ConstLanelets& path,
                                                               bool ignoreMapElevation = false);
 
-  LaneLineStringInstances roadBorders_;   // auxilliary features
-  LaneLineStringInstances laneDividers_;  // auxilliary features
+  LaneLineStringInstances laneLineStrings_;  // all lane line strings (road borders, lane dividers, ...)
 
-  CompoundLaneLineStringInstanceList compoundRoadBorders_;   // auxilliary features
-  CompoundLaneLineStringInstanceList compoundLaneDividers_;  // auxilliary features
-  CompoundLaneLineStringInstanceList compoundCenterlines_;
+  CompoundLaneLineStringInstanceList
+      compoundLineStrings_;  // all compound line strings (road borders, lane dividers, centerlines, ...)
 
   LaneletInstances laneletInstances_;
 

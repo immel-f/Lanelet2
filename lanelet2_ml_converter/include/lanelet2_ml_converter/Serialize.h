@@ -105,11 +105,8 @@ void serialize(Archive& ar, lanelet::ml_converter::Edge& edge, const unsigned in
 
 template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::LaneData& lData, const unsigned int /*version*/) {
-  ar& BOOST_SERIALIZATION_NVP(lData.roadBorders_);
-  ar& BOOST_SERIALIZATION_NVP(lData.laneDividers_);
-  ar& BOOST_SERIALIZATION_NVP(lData.compoundRoadBorders_);
-  ar& BOOST_SERIALIZATION_NVP(lData.compoundLaneDividers_);
-  ar& BOOST_SERIALIZATION_NVP(lData.compoundCenterlines_);
+  ar& BOOST_SERIALIZATION_NVP(lData.laneLineStrings_);
+  ar& BOOST_SERIALIZATION_NVP(lData.compoundLineStrings_);
   ar& BOOST_SERIALIZATION_NVP(lData.laneletInstances_);
   ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdRoadBorderIndices_);
   ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdLaneDividerIndices_);
