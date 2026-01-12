@@ -19,6 +19,29 @@ OrientedRect getRotatedRect(const BasicPoint3d& center, double extentLongitudina
 LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPoint2d& center,
                                     double extentLongitudinal, double extentLateral);
 
+inline std::string lineStringTypeToString(LineStringType type) {
+  if (type == LineStringType::RoadBorder)
+    return "RoadBorder";
+  else if (type == LineStringType::DrivableArea)
+    return "DrivableArea";
+  else if (type == LineStringType::Dashed)
+    return "Dashed";
+  else if (type == LineStringType::Solid)
+    return "Solid";
+  else if (type == LineStringType::Mixed)
+    return "Mixed";
+  else if (type == LineStringType::Virtual)
+    return "Virtual";
+  else if (type == LineStringType::Centerline)
+    return "Centerline";
+  else if (type == LineStringType::Unknown)
+    return "Unknown";
+  else {
+    throw std::runtime_error("Unexpected Line String type!");
+    return "Unknown";
+  }
+}
+
 inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
   Attribute type = lString.attributeOr(AttributeName::Type, "");
   if (type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||

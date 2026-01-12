@@ -229,6 +229,144 @@ CompoundLaneLineStringInstancePtr LaneData::computeCompoundCenterline(const Cons
   return std::make_shared<CompoundLaneLineStringInstance>(compoundCenterlines, LineStringType::Centerline);
 }
 
+void LaneData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
+  // Collect all LineStrings from the map with drivable_space_border attribute
+  std::vector<Id> drivableAreaIds;
+  std::map<Id, std::pair<Id, Id>> endpointIdMap;  // Maps linestring ID to (first_point_id, last_point_id)
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute drivableAreaBorder = lineString.attributeOr("drivable_space_border", "");
+    if (drivableAreaBorder == "true") {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      // Add to laneLineStrings_ if not already present
+      LaneLineStringInstances::iterator it = laneLineStrings_.find(lsId);
+      if (it == laneLineStrings_.end()) {
+        laneLineStrings_.insert({lsId, std::make_shared<LaneLineStringInstance>(
+                                           lsBasic, lsId, LineStringType::DrivableArea, Ids{}, false)});
+      }
+
+      // Store the point IDs of the endpoints for connectivity checking
+      if (lineString.size() >= 2) {
+        drivableAreaIds.push_back(lsId);
+        endpointIdMap[lsId] = {lineString.front().id(), lineString.back().id()};
+      }
+    }
+  }
+
+  // Build adjacency list for connected components based on point IDs
+  std::map<Id, std::vector<Id>> adjacency;
+
+  for (size_t i = 0; i < drivableAreaIds.size(); ++i) {
+    for (size_t j = i + 1; j < drivableAreaIds.size(); ++j) {
+      Id id1 = drivableAreaIds[i];
+      Id id2 = drivableAreaIds[j];
+
+      const auto& endpoints1 = endpointIdMap[id1];
+      const auto& endpoints2 = endpointIdMap[id2];
+
+      // Check if they share an endpoint (based on point IDs)
+      bool connected = endpoints1.first == endpoints2.first || endpoints1.first == endpoints2.second ||
+                       endpoints1.second == endpoints2.first || endpoints1.second == endpoints2.second;
+
+      if (connected) {
+        adjacency[id1].push_back(id2);
+        adjacency[id2].push_back(id1);
+      }
+    }
+  }
+
+  // Find connected components using DFS
+  std::set<Id> visited;
+  for (const auto& id : drivableAreaIds) {
+    if (visited.find(id) != visited.end()) {
+      continue;
+    }
+
+    // DFS to find component
+    std::vector<Id> component;
+    std::vector<Id> stack;
+    stack.push_back(id);
+
+    while (!stack.empty()) {
+      Id current = stack.back();
+      stack.pop_back();
+
+      if (visited.find(current) != visited.end()) {
+        continue;
+      }
+
+      visited.insert(current);
+      component.push_back(current);
+
+      for (const auto& neighbor : adjacency[current]) {
+        if (visited.find(neighbor) == visited.end()) {
+          stack.push_back(neighbor);
+        }
+      }
+    }
+
+    // Order the component to form continuous chains
+    if (!component.empty()) {
+      std::set<size_t> usedIndices;
+
+      while (usedIndices.size() < component.size()) {
+        // Find the first unused linestring
+        size_t startIdx = 0;
+        while (startIdx < component.size() && usedIndices.count(startIdx)) {
+          startIdx++;
+        }
+
+        if (startIdx >= component.size()) {
+          break;  // All linestrings have been used
+        }
+
+        // Start a new chain with this linestring
+        LaneLineStringInstanceList compoundFeatures;
+        usedIndices.insert(startIdx);
+        Id currentEndpoint = endpointIdMap[component[startIdx]].second;
+        compoundFeatures.push_back(getLineStringFeatFromId(component[startIdx], false));
+
+        // Build the continuous chain
+        bool foundConnection = true;
+        while (foundConnection && usedIndices.size() < component.size()) {
+          foundConnection = false;
+
+          for (size_t i = 0; i < component.size(); ++i) {
+            if (usedIndices.count(i)) continue;
+
+            const auto& endpoints = endpointIdMap[component[i]];
+
+            // Check if this linestring connects to current endpoint
+            if (endpoints.first == currentEndpoint) {
+              // Connects normally, no inversion needed
+              compoundFeatures.push_back(getLineStringFeatFromId(component[i], false));
+              currentEndpoint = endpoints.second;
+              usedIndices.insert(i);
+              foundConnection = true;
+              break;
+            } else if (endpoints.second == currentEndpoint) {
+              // Connects with inversion - manually invert the linestring
+              compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[i], false)));
+              currentEndpoint = endpoints.first;
+              usedIndices.insert(i);
+              foundConnection = true;
+              break;
+            }
+          }
+        }
+
+        // Create a compound instance for this chain
+        if (!compoundFeatures.empty()) {
+          compoundLineStrings_.push_back(
+              std::make_shared<CompoundLaneLineStringInstance>(compoundFeatures, LineStringType::DrivableArea));
+        }
+      }
+    }
+  }
+}
+
 std::map<Id, size_t>::const_iterator findFirstOccElement(const CompoundElsList& elsList,
                                                          const std::map<Id, size_t>& searchMap) {
   for (const auto& el : elsList.ids) {
@@ -339,6 +477,11 @@ void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
     LineStringType cmpdType = toBeCompounded.front()->type();
     compoundLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, cmpdType));
   }
+
+  // Process drivable area borders if not in untagged mode
+  if (!untaggedDrivableAreaMode) {
+    computeDrivableAreaBorders(localSubmap);
+  }
 }
 
 void LaneData::updateAssociatedCpdInstanceIndices() {
@@ -347,21 +490,11 @@ void LaneData::updateAssociatedCpdInstanceIndices() {
     LineStringType type = cpdFeat->type();
     for (const auto& indFeat : cpdFeat->features()) {
       for (const auto& id : indFeat->laneletIDs()) {
-        if (type == LineStringType::RoadBorder) {
-          associatedCpdRoadBorderIndices_[id].push_back(i);
-        } else if (type == LineStringType::Centerline) {
-          continue;
-        } else {
-          associatedCpdLaneDividerIndices_[id].push_back(i);
+        if (type != LineStringType::Centerline) {
+          associatedCpdLineStringsIndices_[type][id].push_back(i);
         }
       }
-      if (type == LineStringType::RoadBorder) {
-        associatedCpdRoadBorderIndices_[indFeat->mapID()].push_back(i);
-      } else if (type == LineStringType::Centerline) {
-        associatedCpdCenterlineIndices_[indFeat->mapID()].push_back(i);
-      } else {
-        associatedCpdLaneDividerIndices_[indFeat->mapID()].push_back(i);
-      }
+      associatedCpdLineStringsIndices_[type][indFeat->mapID()].push_back(i);
     }
   }
 }
@@ -425,25 +558,43 @@ LaneData::TensorInstanceData LaneData::getTensorInstanceData(bool pointsIn2d, bo
   return tfData_.value();
 }
 
-CompoundLaneLineStringInstanceList associatedCpdFeats(Id mapId, const CompoundLaneLineStringInstanceList& featList,
-                                                      const std::map<Id, std::vector<size_t>>& assoIndices) {
+CompoundLaneLineStringInstanceList LaneData::associatedCpdLineStringsOfType(Id mapId, LineStringType type) const {
   CompoundLaneLineStringInstanceList assoFeats;
-  for (const auto& idx : assoIndices.at(mapId)) {
-    assoFeats.push_back(featList[idx]);
+  try {
+    const auto& typeIndices = associatedCpdLineStringsIndices_.at(type);
+    for (const auto& idx : typeIndices.at(mapId)) {
+      assoFeats.push_back(compoundLineStrings_[idx]);
+    }
+  } catch (const std::out_of_range&) {
+    return assoFeats;
   }
   return assoFeats;
 }
 
 CompoundLaneLineStringInstanceList LaneData::associatedCpdRoadBorders(Id mapId) {
-  return associatedCpdFeats(mapId, compoundLineStrings_, associatedCpdRoadBorderIndices_);
+  return associatedCpdLineStringsOfType(mapId, LineStringType::RoadBorder);
 }
 
 CompoundLaneLineStringInstanceList LaneData::associatedCpdLaneDividers(Id mapId) {
-  return associatedCpdFeats(mapId, compoundLineStrings_, associatedCpdLaneDividerIndices_);
+  // For lane dividers, we need to check all divider types (Dashed, Solid, Mixed, Virtual)
+  CompoundLaneLineStringInstanceList result;
+  for (const auto& pair : associatedCpdLineStringsIndices_) {
+    LineStringType type = pair.first;
+    if (type == LineStringType::Dashed || type == LineStringType::Solid || type == LineStringType::Mixed ||
+        type == LineStringType::Virtual) {
+      CompoundLaneLineStringInstanceList typeResult = associatedCpdLineStringsOfType(mapId, type);
+      result.insert(result.end(), typeResult.begin(), typeResult.end());
+    }
+  }
+  return result;
 }
 
 CompoundLaneLineStringInstanceList LaneData::associatedCpdCenterlines(Id mapId) {
-  return associatedCpdFeats(mapId, compoundLineStrings_, associatedCpdCenterlineIndices_);
+  return associatedCpdLineStringsOfType(mapId, LineStringType::Centerline);
+}
+
+CompoundLaneLineStringInstanceList LaneData::associatedCpdDrivableAreaBorders(Id mapId) {
+  return associatedCpdLineStringsOfType(mapId, LineStringType::DrivableArea);
 }
 
 CompoundLaneLineStringInstancePtr pointMatrixCpdFeat(
@@ -469,40 +620,52 @@ CompoundLaneLineStringInstancePtr LaneData::TensorInstanceData::pointMatrixCpdCe
   return pointMatrixCpdFeat(index, pointMatrixCpdCenterline_);
 }
 
-LaneLineStringInstances LaneData::roadBorders() const {
+LaneLineStringInstances LaneData::lineStringsOfType(LineStringType type) const {
   LaneLineStringInstances result;
   for (const auto& pair : laneLineStrings_) {
-    if (pair.second->type() == LineStringType::RoadBorder) {
+    if (pair.second->type() == type) {
       result.insert(pair);
     }
   }
   return result;
 }
+
+LaneLineStringInstances LaneData::roadBorders() const { return lineStringsOfType(LineStringType::RoadBorder); }
 
 LaneLineStringInstances LaneData::laneDividers() const {
   LaneLineStringInstances result;
   for (const auto& pair : laneLineStrings_) {
-    if (pair.second->type() != LineStringType::RoadBorder && pair.second->type() != LineStringType::Centerline) {
+    if (pair.second->type() == LineStringType::Dashed || pair.second->type() == LineStringType::Solid ||
+        pair.second->type() == LineStringType::Mixed || pair.second->type() == LineStringType::Virtual) {
       result.insert(pair);
     }
   }
   return result;
 }
 
-CompoundLaneLineStringInstanceList LaneData::compoundRoadBorders() const {
+LaneLineStringInstances LaneData::drivableAreaBorders() const {
+  return lineStringsOfType(LineStringType::DrivableArea);
+}
+
+CompoundLaneLineStringInstanceList LaneData::compoundLineStringsOfType(LineStringType type) const {
   CompoundLaneLineStringInstanceList result;
   for (const auto& feat : compoundLineStrings_) {
-    if (feat->type() == LineStringType::RoadBorder) {
+    if (feat->type() == type) {
       result.push_back(feat);
     }
   }
   return result;
 }
 
+CompoundLaneLineStringInstanceList LaneData::compoundRoadBorders() const {
+  return compoundLineStringsOfType(LineStringType::RoadBorder);
+}
+
 CompoundLaneLineStringInstanceList LaneData::compoundLaneDividers() const {
   CompoundLaneLineStringInstanceList result;
   for (const auto& feat : compoundLineStrings_) {
-    if (feat->type() != LineStringType::RoadBorder && feat->type() != LineStringType::Centerline) {
+    if (feat->type() == LineStringType::Dashed || feat->type() == LineStringType::Solid ||
+        feat->type() == LineStringType::Mixed || feat->type() == LineStringType::Virtual) {
       result.push_back(feat);
     }
   }
@@ -510,13 +673,11 @@ CompoundLaneLineStringInstanceList LaneData::compoundLaneDividers() const {
 }
 
 CompoundLaneLineStringInstanceList LaneData::compoundCenterlines() const {
-  CompoundLaneLineStringInstanceList result;
-  for (const auto& feat : compoundLineStrings_) {
-    if (feat->type() == LineStringType::Centerline) {
-      result.push_back(feat);
-    }
-  }
-  return result;
+  return compoundLineStringsOfType(LineStringType::Centerline);
+}
+
+CompoundLaneLineStringInstanceList LaneData::compoundDrivableAreaBorders() const {
+  return compoundLineStringsOfType(LineStringType::DrivableArea);
 }
 
 LaneLineStringInstances LaneData::validRoadBorders() const { return getValidElements(roadBorders()); }
@@ -533,6 +694,10 @@ CompoundLaneLineStringInstanceList LaneData::validCompoundLaneDividers() const {
 
 CompoundLaneLineStringInstanceList LaneData::validCompoundCenterlines() const {
   return getValidElements(compoundCenterlines());
+}
+
+CompoundLaneLineStringInstanceList LaneData::validCompoundDrivableAreaBorders() const {
+  return getValidElements(compoundDrivableAreaBorders());
 }
 
 }  // namespace ml_converter

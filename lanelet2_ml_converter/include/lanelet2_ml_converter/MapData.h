@@ -102,14 +102,19 @@ class LaneData {
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                   double roll = 0);
 
+  LaneLineStringInstances lineStringsOfType(LineStringType type) const;
   // Road borders (LineStringType::RoadBorder)
   LaneLineStringInstances roadBorders() const;
   // Lane dividers (LineStringType::Dashed, Solid, Mixed, Virtual)
   LaneLineStringInstances laneDividers() const;
+  // Drivable area borders (LineStringType::DrivableArea)
+  LaneLineStringInstances drivableAreaBorders() const;
 
+  CompoundLaneLineStringInstanceList compoundLineStringsOfType(LineStringType type) const;
   CompoundLaneLineStringInstanceList compoundRoadBorders() const;
   CompoundLaneLineStringInstanceList compoundLaneDividers() const;
   CompoundLaneLineStringInstanceList compoundCenterlines() const;
+  CompoundLaneLineStringInstanceList compoundDrivableAreaBorders() const;
 
   LaneLineStringInstances validRoadBorders() const;
   LaneLineStringInstances validLaneDividers() const;
@@ -117,12 +122,16 @@ class LaneData {
   CompoundLaneLineStringInstanceList validCompoundRoadBorders() const;
   CompoundLaneLineStringInstanceList validCompoundLaneDividers() const;
   CompoundLaneLineStringInstanceList validCompoundCenterlines() const;
+  CompoundLaneLineStringInstanceList validCompoundDrivableAreaBorders() const;
 
+  CompoundLaneLineStringInstanceList associatedCpdLineStringsOfType(Id mapId, LineStringType type) const;
   CompoundLaneLineStringInstanceList associatedCpdRoadBorders(
       Id mapId);  // get features associated to map element with id
   CompoundLaneLineStringInstanceList associatedCpdLaneDividers(
       Id mapId);  // get features associated to map element with id
   CompoundLaneLineStringInstanceList associatedCpdCenterlines(
+      Id mapId);  // get features associated to map element with id
+  CompoundLaneLineStringInstanceList associatedCpdDrivableAreaBorders(
       Id mapId);  // get features associated to map element with id
 
   const LaneletInstances& laneletInstances() { return laneletInstances_; }
@@ -158,6 +167,7 @@ class LaneData {
   std::vector<internal::CompoundElsList> computeCompoundRightBorders(const ConstLanelets& path);
   CompoundLaneLineStringInstancePtr computeCompoundCenterline(const ConstLanelets& path,
                                                               bool ignoreMapElevation = false);
+  void computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap);
 
   LaneLineStringInstances laneLineStrings_;  // all lane line strings (road borders, lane dividers, ...)
 
@@ -166,12 +176,8 @@ class LaneData {
 
   LaneletInstances laneletInstances_;
 
-  std::map<Id, std::vector<size_t>>
-      associatedCpdRoadBorderIndices_;  // relates map element id to the "unfiltered" compound features!
-  std::map<Id, std::vector<size_t>>
-      associatedCpdLaneDividerIndices_;  // relates map element id to the "unfiltered" compound features!
-  std::map<Id, std::vector<size_t>>
-      associatedCpdCenterlineIndices_;  // relates map element id to the "unfiltered" compound features!
+  // Maps LineStringType to a map of (mapId -> vector of compound feature indices)
+  std::map<LineStringType, std::map<Id, std::vector<size_t>>> associatedCpdLineStringsIndices_;
 
   Edges edges_;       // edge list for centerlines
   std::string uuid_;  // sample id

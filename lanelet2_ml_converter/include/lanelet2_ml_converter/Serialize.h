@@ -108,9 +108,7 @@ void serialize(Archive& ar, lanelet::ml_converter::LaneData& lData, const unsign
   ar& BOOST_SERIALIZATION_NVP(lData.laneLineStrings_);
   ar& BOOST_SERIALIZATION_NVP(lData.compoundLineStrings_);
   ar& BOOST_SERIALIZATION_NVP(lData.laneletInstances_);
-  ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdRoadBorderIndices_);
-  ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdLaneDividerIndices_);
-  ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdCenterlineIndices_);
+  ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdLineStringsIndices_);
   ar& BOOST_SERIALIZATION_NVP(lData.edges_);
 }
 

@@ -20,7 +20,8 @@ enum class LineStringType {
   Mixed,
   Virtual,
   Centerline,
-  Unknown
+  Unknown,
+  DrivableArea,
 };  // Mixed == DashedSolid or SolidDashed
 enum class TEType { TrafficLight, TrafficSign, Unknown };
 
