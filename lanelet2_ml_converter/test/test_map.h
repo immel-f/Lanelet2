@@ -95,6 +95,14 @@ class MapTestData {
     addPoint(5.0, -11.0, 1.0);
     addPoint(7.0, -11.0, 1.0);
     addPoint(9.0, -11.0, 1.0);  // p39
+
+    addPoint(5.0, -2.0, 1.0);  // p40
+    addPoint(6.0, -1.0, 1.0);  // p41
+    addPoint(8.0, -1.0, 1.0);  // p42
+    addPoint(9.0, -2.0, 1.0);  // p43
+    addPoint(7.0, -3.0, 1.0);  // p44
+    addPoint(7.0, -4.0, 1.0);  // p45
+    addPoint(9.0, -0.5, 1.0);  // p46
   }
 
   void initLineStrings() {
@@ -149,6 +157,17 @@ class MapTestData {
     lines.at(1017).setAttribute(AttributeName::Type, AttributeValueString::Virtual);
     addLine(Points3d{points.at(29), points.at(19), points.at(15)});  // l1018
     lines.at(1018).setAttribute(AttributeName::Type, AttributeValueString::Virtual);
+
+    addLine(Points3d{points.at(40), points.at(41), points.at(42), points.at(43)});  // l1019
+    lines.at(1019).setAttribute("drivable_space_border", "true");
+    addLine(Points3d{points.at(40), points.at(18), points.at(44)});  // l1020
+    lines.at(1020).setAttribute("drivable_space_border", "true");
+    addLine(Points3d{points.at(44), points.at(45)});  // l1021
+    lines.at(1021).setAttribute("drivable_space_border", "true");
+    addLine(Points3d{points.at(44), points.at(19), points.at(43)});  // l1022
+    lines.at(1022).setAttribute("drivable_space_border", "true");
+    addLine(Points3d{points.at(42), points.at(46)});  // l1023
+    lines.at(1023).setAttribute("drivable_space_border", "true");
   }
   void initLanelets() {
     lanelets.clear();

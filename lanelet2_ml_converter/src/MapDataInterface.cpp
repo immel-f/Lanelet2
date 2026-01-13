@@ -51,7 +51,8 @@ MapDataInterface::MapDataInterface(LaneletMapConstPtr laneletMap, Configuration 
 LaneDataPtr MapDataInterface::getLaneData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
                                           lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch,
                                           double roll, bool processAll) {
-  LaneDataPtr laneData = LaneData::build(localSubmap, localSubmapGraph, trafficRules_, config_.ignoreMapElevation);
+  LaneDataPtr laneData = LaneData::build(localSubmap, localSubmapGraph, trafficRules_, config_.ignoreMapElevation,
+                                         config_.lineStringTypeGrouping);
   if (processAll) {
     laneData->processAll(bbox, config_.paramType, config_.nPoints, pitch, roll);
   }

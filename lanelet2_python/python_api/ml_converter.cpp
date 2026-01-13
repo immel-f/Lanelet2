@@ -174,7 +174,12 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("RoadBorder", LineStringType::RoadBorder)
       .value("Dashed", LineStringType::Dashed)
       .value("Solid", LineStringType::Solid)
-      .value("Mixed", LineStringType::Mixed)
+      .value("CurbstoneHigh", LineStringType::CurbstoneHigh)
+      .value("CurbstoneLow", LineStringType::CurbstoneLow)
+      .value("Fence", LineStringType::Fence)
+      .value("SolidSolid", LineStringType::SolidSolid)
+      .value("SolidDashed", LineStringType::SolidDashed)
+      .value("DashedSolid", LineStringType::DashedSolid)
       .value("Virtual", LineStringType::Virtual)
       .value("Centerline", LineStringType::Centerline)
       .value("Unknown", LineStringType::Unknown);
@@ -284,7 +289,8 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
         class_<LaneData, LaneDataPtr>("LaneData", "Class for holding, accessing and processing of lane data")
             .def(init<>())
             .def("build", &LaneData::build,
-                 (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"), arg("ignoreMapElevation") = false))
+                 (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"), arg("ignoreMapElevation") = false,
+                  arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping()))
             .staticmethod("build")
             .def("processAll", &LaneData::processAll)
             .def("lineStringsOfType", &LaneData::lineStringsOfType, (arg("type")))

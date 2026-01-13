@@ -16,20 +16,22 @@ namespace ml_converter {
 class MapDataInterface {
  public:
   struct Configuration {
-    Configuration() noexcept {}
+    Configuration() noexcept : lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
     Configuration(LaneletRepresentationType reprType, ParametrizationType paramType, double submapExtentLongitudinal,
                   double submapExtentLateral, int nPoints) noexcept
         : reprType{reprType},
           paramType{paramType},
           submapExtentLongitudinal{submapExtentLongitudinal},
           submapExtentLateral{submapExtentLateral},
-          nPoints{nPoints} {}
+          nPoints{nPoints},
+          lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
     LaneletRepresentationType reprType{LaneletRepresentationType::Boundaries};
     ParametrizationType paramType{ParametrizationType::LineString};
     double submapExtentLongitudinal{30};  // in driving direction
     double submapExtentLateral{15};       // in lateral direction
     int nPoints{20};
     bool ignoreMapElevation{false};  // if true, elevation (z coordinate) in map elements is ignored and set to 0
+    LineStringTypeGrouping lineStringTypeGrouping;  // grouping of types for compound instance generation
   };
   MapDataInterface(LaneletMapConstPtr laneletMap);
   MapDataInterface(LaneletMapConstPtr laneletMap, Configuration config);

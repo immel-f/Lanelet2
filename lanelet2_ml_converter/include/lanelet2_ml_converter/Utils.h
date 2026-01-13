@@ -28,8 +28,18 @@ inline std::string lineStringTypeToString(LineStringType type) {
     return "Dashed";
   else if (type == LineStringType::Solid)
     return "Solid";
-  else if (type == LineStringType::Mixed)
-    return "Mixed";
+  else if (type == LineStringType::CurbstoneHigh)
+    return "CurbstoneHigh";
+  else if (type == LineStringType::CurbstoneLow)
+    return "CurbstoneLow";
+  else if (type == LineStringType::Fence)
+    return "Fence";
+  else if (type == LineStringType::SolidSolid)
+    return "SolidSolid";
+  else if (type == LineStringType::SolidDashed)
+    return "SolidDashed";
+  else if (type == LineStringType::DashedSolid)
+    return "DashedSolid";
   else if (type == LineStringType::Virtual)
     return "Virtual";
   else if (type == LineStringType::Centerline)
@@ -44,27 +54,39 @@ inline std::string lineStringTypeToString(LineStringType type) {
 
 inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
   Attribute type = lString.attributeOr(AttributeName::Type, "");
-  if (type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||
-      type == AttributeValueString::Fence) {
+  Attribute subtype = lString.attributeOr(AttributeName::Subtype, "");
+
+  // Check for specific types first
+  if (type == AttributeValueString::RoadBorder) {
     return LineStringType::RoadBorder;
+  } else if (type == AttributeValueString::Curbstone) {
+    // For Curbstone, check the subtype
+    if (subtype == AttributeValueString::Low) {
+      return LineStringType::CurbstoneLow;
+    }
+    // Default to CurbstoneHigh if no subtype or subtype is High
+    return LineStringType::CurbstoneHigh;
+  } else if (type == AttributeValueString::Fence) {
+    return LineStringType::Fence;
   } else if (type == AttributeValueString::Virtual) {
     return LineStringType::Virtual;
   }
-  Attribute subtype = lString.attributeOr(AttributeName::Subtype, "");
-  if (subtype == AttributeValueString::Dashed)
+
+  // Check subtype for lane marking types
+  if (subtype == AttributeValueString::Dashed) {
     return LineStringType::Dashed;
-  else if (subtype == AttributeValueString::Solid)
+  } else if (subtype == AttributeValueString::Solid) {
     return LineStringType::Solid;
-  else if (subtype == AttributeValueString::SolidSolid)
-    return LineStringType::Solid;
-  else if (subtype == AttributeValueString::SolidDashed)
-    return LineStringType::Mixed;
-  else if (subtype == AttributeValueString::DashedSolid)
-    return LineStringType::Mixed;
-  else {
-    // throw std::runtime_error("Unexpected Line String Subtype!");
-    return LineStringType::Unknown;
+  } else if (subtype == AttributeValueString::SolidSolid) {
+    return LineStringType::SolidSolid;
+  } else if (subtype == AttributeValueString::SolidDashed) {
+    return LineStringType::SolidDashed;
+  } else if (subtype == AttributeValueString::DashedSolid) {
+    return LineStringType::DashedSolid;
   }
+
+  // Default to Unknown if no match found
+  return LineStringType::Unknown;
 }
 
 inline TEType teTypeToEnum(const ConstLineString3d& te) {

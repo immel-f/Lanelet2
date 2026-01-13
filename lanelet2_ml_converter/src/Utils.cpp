@@ -48,8 +48,21 @@ LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPo
   BasicPoint2d initRegionRear = {center.x() - 1.1 * maxExtent, center.y() - 1.1 * maxExtent};
   BasicPoint2d initRegionFront = {center.x() + 1.1 * maxExtent, center.y() + 1.1 * maxExtent};
   BoundingBox2d initSearchRegion{initRegionRear, initRegionFront};
-  ConstLanelets initRegion = laneletMap->laneletLayer.search(initSearchRegion);
-  return utils::createConstSubmap(initRegion, {});
+  
+  // Cast to non-const to use non-const search
+  auto nonConstMap = std::const_pointer_cast<LaneletMap>(std::static_pointer_cast<const LaneletMap>(laneletMap));
+  Lanelets initRegion = nonConstMap->laneletLayer.search(initSearchRegion);
+  
+  // Create submap from lanelets
+  auto submapPtr = utils::createSubmap(initRegion, {});
+  
+  // Extract linestrings in the search region and add them to the submap
+  LineStrings3d lineStringsInRegion = nonConstMap->lineStringLayer.search(initSearchRegion);
+  for (const auto& lineString : lineStringsInRegion) {
+    submapPtr->add(lineString);
+  }
+  
+  return submapPtr;
 }
 
 /// TODO: FURTHER INVESTIGATE THE WEIRD BEHAVIOR OF BOOST LINE_INTERPOLATE

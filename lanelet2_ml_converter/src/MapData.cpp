@@ -9,20 +9,15 @@ using namespace internal;
 
 LaneDataPtr LaneData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
-                            bool untaggedDrivableAreaMode) {
+                            const LineStringTypeGrouping& lineStringTypeGrouping) {
   LaneDataPtr data = std::make_shared<LaneData>();
+  data->lineStringTypeGrouping_ = lineStringTypeGrouping;
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initLaneletInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->updateAssociatedCpdInstanceIndices();
   return data;
-}
-
-inline bool isRoadBorder(const ConstLineString3d& lstring) {
-  Attribute type = lstring.attributeOr(AttributeName::Type, "");
-  return type == AttributeValueString::RoadBorder || type == AttributeValueString::Curbstone ||
-         type == AttributeValueString::Fence;
 }
 
 void LaneData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
@@ -176,17 +171,20 @@ std::vector<CompoundElsList> LaneData::computeCompoundLeftBorders(const ConstLan
   std::vector<CompoundElsList> compoundBorders;
   ConstLanelet start = path.front();
   LineStringType currType = getLineStringTypeFromId(start.leftBound3d().id());
+  int currGroupIdx = getLineStringTypeGroupIndex(currType, lineStringTypeGrouping_);
 
   compoundBorders.push_back(CompoundElsList{start.leftBound3d().id(), start.leftBound3d().inverted(), currType});
 
   for (size_t i = 1; i != path.size(); i++) {
     LineStringType newType = getLineStringTypeFromId(path[i].leftBound3d().id());
-    if (currType == newType) {
+    int newGroupIdx = getLineStringTypeGroupIndex(newType, lineStringTypeGrouping_);
+    if (currGroupIdx == newGroupIdx) {
       compoundBorders.back().ids.push_back(path[i].leftBound3d().id());
       compoundBorders.back().inverted.push_back(path[i].leftBound3d().inverted());
     } else {
       compoundBorders.push_back(CompoundElsList{path[i].leftBound3d().id(), path[i].leftBound3d().inverted(), newType});
       currType = newType;
+      currGroupIdx = newGroupIdx;
     }
   }
   return compoundBorders;
@@ -196,18 +194,21 @@ std::vector<CompoundElsList> LaneData::computeCompoundRightBorders(const ConstLa
   std::vector<CompoundElsList> compoundBorders;
   ConstLanelet start = path.front();
   LineStringType currType = getLineStringTypeFromId(start.rightBound3d().id());
+  int currGroupIdx = getLineStringTypeGroupIndex(currType, lineStringTypeGrouping_);
 
   compoundBorders.push_back(CompoundElsList{start.rightBound3d().id(), start.rightBound3d().inverted(), currType});
 
   for (size_t i = 1; i != path.size(); i++) {
     LineStringType newType = getLineStringTypeFromId(path[i].rightBound3d().id());
-    if (currType == newType) {
+    int newGroupIdx = getLineStringTypeGroupIndex(newType, lineStringTypeGrouping_);
+    if (currGroupIdx == newGroupIdx) {
       compoundBorders.back().ids.push_back(path[i].rightBound3d().id());
       compoundBorders.back().inverted.push_back(path[i].rightBound3d().inverted());
     } else {
       compoundBorders.push_back(
           CompoundElsList{path[i].rightBound3d().id(), path[i].rightBound3d().inverted(), newType});
       currType = newType;
+      currGroupIdx = newGroupIdx;
     }
   }
   return compoundBorders;
@@ -440,8 +441,7 @@ void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
 
 void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                                      lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
-                                     bool untaggedDrivableAreaMode) {
+                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   std::vector<CompoundElsList> compoundedBordersAndDividers;
   std::map<Id, size_t> elInsertIdx;
 
@@ -478,10 +478,8 @@ void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
     compoundLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, cmpdType));
   }
 
-  // Process drivable area borders if not in untagged mode
-  if (!untaggedDrivableAreaMode) {
-    computeDrivableAreaBorders(localSubmap);
-  }
+  // Process drivable area borders
+  computeDrivableAreaBorders(localSubmap);
 }
 
 void LaneData::updateAssociatedCpdInstanceIndices() {
@@ -576,12 +574,11 @@ CompoundLaneLineStringInstanceList LaneData::associatedCpdRoadBorders(Id mapId) 
 }
 
 CompoundLaneLineStringInstanceList LaneData::associatedCpdLaneDividers(Id mapId) {
-  // For lane dividers, we need to check all divider types (Dashed, Solid, Mixed, Virtual)
+  // For lane dividers, we need to check all divider types
   CompoundLaneLineStringInstanceList result;
   for (const auto& pair : associatedCpdLineStringsIndices_) {
     LineStringType type = pair.first;
-    if (type == LineStringType::Dashed || type == LineStringType::Solid || type == LineStringType::Mixed ||
-        type == LineStringType::Virtual) {
+    if (isConceptualLaneDivider(type)) {
       CompoundLaneLineStringInstanceList typeResult = associatedCpdLineStringsOfType(mapId, type);
       result.insert(result.end(), typeResult.begin(), typeResult.end());
     }
@@ -591,10 +588,6 @@ CompoundLaneLineStringInstanceList LaneData::associatedCpdLaneDividers(Id mapId)
 
 CompoundLaneLineStringInstanceList LaneData::associatedCpdCenterlines(Id mapId) {
   return associatedCpdLineStringsOfType(mapId, LineStringType::Centerline);
-}
-
-CompoundLaneLineStringInstanceList LaneData::associatedCpdDrivableAreaBorders(Id mapId) {
-  return associatedCpdLineStringsOfType(mapId, LineStringType::DrivableArea);
 }
 
 CompoundLaneLineStringInstancePtr pointMatrixCpdFeat(
@@ -635,8 +628,7 @@ LaneLineStringInstances LaneData::roadBorders() const { return lineStringsOfType
 LaneLineStringInstances LaneData::laneDividers() const {
   LaneLineStringInstances result;
   for (const auto& pair : laneLineStrings_) {
-    if (pair.second->type() == LineStringType::Dashed || pair.second->type() == LineStringType::Solid ||
-        pair.second->type() == LineStringType::Mixed || pair.second->type() == LineStringType::Virtual) {
+    if (isConceptualLaneDivider(pair.second->type())) {
       result.insert(pair);
     }
   }
@@ -658,14 +650,19 @@ CompoundLaneLineStringInstanceList LaneData::compoundLineStringsOfType(LineStrin
 }
 
 CompoundLaneLineStringInstanceList LaneData::compoundRoadBorders() const {
-  return compoundLineStringsOfType(LineStringType::RoadBorder);
+  CompoundLaneLineStringInstanceList result;
+  for (const auto& feat : compoundLineStrings_) {
+    if (isConceptualRoadBorder(feat->type())) {
+      result.push_back(feat);
+    }
+  }
+  return result;
 }
 
 CompoundLaneLineStringInstanceList LaneData::compoundLaneDividers() const {
   CompoundLaneLineStringInstanceList result;
   for (const auto& feat : compoundLineStrings_) {
-    if (feat->type() == LineStringType::Dashed || feat->type() == LineStringType::Solid ||
-        feat->type() == LineStringType::Mixed || feat->type() == LineStringType::Virtual) {
+    if (isConceptualLaneDivider(feat->type())) {
       result.push_back(feat);
     }
   }

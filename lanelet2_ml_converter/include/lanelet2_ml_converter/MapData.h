@@ -98,14 +98,14 @@ class LaneData {
   LaneData() noexcept : uuid_{boost::lexical_cast<std::string>(boost::uuids::random_generator()())} {}
   static LaneDataPtr build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                            traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false,
-                           bool untaggedDrivableAreaMode = false);
+                           const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                   double roll = 0);
 
   LaneLineStringInstances lineStringsOfType(LineStringType type) const;
   // Road borders (LineStringType::RoadBorder)
   LaneLineStringInstances roadBorders() const;
-  // Lane dividers (LineStringType::Dashed, Solid, Mixed, Virtual)
+  // Lane dividers (LineStringType::Dashed, Solid, SolidSolid, SolidDashed, DashedSolid, Virtual)
   LaneLineStringInstances laneDividers() const;
   // Drivable area borders (LineStringType::DrivableArea)
   LaneLineStringInstances drivableAreaBorders() const;
@@ -155,8 +155,7 @@ class LaneData {
                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false);
   void initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                              lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false,
-                             bool untaggedDrivableAreaMode = false);
+                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false);
   void updateAssociatedCpdInstanceIndices();
   void getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
                 ConstLanelet start, ConstLanelets initPath = ConstLanelets());
@@ -183,6 +182,7 @@ class LaneData {
   std::string uuid_;  // sample id
 
   Optional<TensorInstanceData> tfData_;
+  LineStringTypeGrouping lineStringTypeGrouping_{getDefaultLineStringTypeGrouping()};
 };
 
 /// TODO: finish TE support
