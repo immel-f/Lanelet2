@@ -45,7 +45,7 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
   };
 }
 
-/// @brief Get a RoadBorderMerged grouping: merges road border with unknown types
+/// @brief Get a RoadBorderMerged grouping: merges road border with fence, curbstone high and curbstone low
 inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
   return {
       {LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},
@@ -61,7 +61,8 @@ inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
   };
 }
 
-/// @brief Get MapTR default simple grouping: merges road borders with lane dividers (excluding Virtual)
+/// @brief Get MapTR default simple grouping: RoadBorderMerged grouping with all lane dividers merged as well (including
+/// dashed and solid, excluding Virtual)
 inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
   return {
       {LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},
@@ -77,7 +78,8 @@ inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
   };
 }
 
-/// @brief Get M3TR default grouping: merges Solid, SolidSolid, SolidDashed, and DashedSolid LineStringTypes
+/// @brief Get M3TR default grouping: RoadBorderMerged grouping, merges Solid, SolidSolid, SolidDashed, and DashedSolid
+/// LineStringTypes
 inline LineStringTypeGrouping getM3TRDefaultGrouping() {
   return {
       {LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},

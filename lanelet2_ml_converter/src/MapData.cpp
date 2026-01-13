@@ -590,6 +590,10 @@ CompoundLaneLineStringInstanceList LaneData::associatedCpdCenterlines(Id mapId) 
   return associatedCpdLineStringsOfType(mapId, LineStringType::Centerline);
 }
 
+CompoundLaneLineStringInstanceList LaneData::associatedCpdDrivableAreaBorders(Id mapId) {
+  return associatedCpdLineStringsOfType(mapId, LineStringType::DrivableArea);
+}
+
 CompoundLaneLineStringInstancePtr pointMatrixCpdFeat(
     size_t index, const std::map<size_t, CompoundLaneLineStringInstancePtr>& assoFeats) {
   CompoundLaneLineStringInstancePtr feat;

@@ -182,7 +182,24 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("DashedSolid", LineStringType::DashedSolid)
       .value("Virtual", LineStringType::Virtual)
       .value("Centerline", LineStringType::Centerline)
-      .value("Unknown", LineStringType::Unknown);
+      .value("Unknown", LineStringType::Unknown)
+      .value("DrivableArea", LineStringType::DrivableArea);
+
+  // LineStringTypeGrouping is a vector of vector of LineStringType
+  typedef std::vector<std::vector<LineStringType>> LineStringTypeGrouping;
+  class_<LineStringTypeGrouping>("LineStringTypeGrouping",
+                                 "Type grouping for compound instances: list of lists of LineStringTypes")
+      .def(vector_indexing_suite<LineStringTypeGrouping>());
+
+  def("getDefaultLineStringTypeGrouping", &getDefaultLineStringTypeGrouping,
+      "Get the default LineStringTypeGrouping where each type has its own group");
+  def("getRoadBorderMergedGrouping", &getRoadBorderMergedGrouping,
+      "Get a RoadBorderMerged grouping: merges road border with fence, curbstone high and curbstone low");
+  def("getMapTRDefaultSimpleGrouping", &getMapTRDefaultSimpleGrouping,
+      "Get MapTR default simple grouping: RoadBorderMerged grouping with all lane dividers merged as well (including "
+      "dashed and solid, excluding Virtual)");
+  def("getM3TRDefaultGrouping", &getM3TRDefaultGrouping,
+      "Get M3TR default grouping: RoadBorderMerged grouping, merges Solid, SolidSolid, SolidDashed, and DashedSolid LineStringTypes");
 
   class_<OrientedRect>("OrientedRect", "Oriented rectangle for feature crop area", no_init)
       .add_property("bounds", make_function(&OrientedRect::bounds_const, return_value_policy<copy_const_reference>()));
@@ -382,7 +399,8 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
         .def_readwrite("submapExtentLongitudinal", &MapDataInterface::Configuration::submapExtentLongitudinal)
         .def_readwrite("submapExtentLateral", &MapDataInterface::Configuration::submapExtentLateral)
         .def_readwrite("nPoints", &MapDataInterface::Configuration::nPoints)
-        .def_readwrite("ignoreMapElevation", &MapDataInterface::Configuration::ignoreMapElevation);
+        .def_readwrite("ignoreMapElevation", &MapDataInterface::Configuration::ignoreMapElevation)
+        .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping);
   }
 
   // Eigen, stl etc. converters
