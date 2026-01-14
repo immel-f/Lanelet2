@@ -41,11 +41,19 @@ TEST_F(MLConverterTest, MapDataInterface) {  // NOLINT
 
   for (size_t i = 0; i < lDataVec.size(); i++) {
     std::vector<Eigen::MatrixXd> compoundRoadBorders =
-        getPointMatrices(getValidElements(lDataVec[i]->compoundRoadBorders()), true);
+        lDataVec[i]->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::RoadBorder);
     std::vector<Eigen::MatrixXd> compoundLaneDividers =
-        getPointMatrices(getValidElements(lDataVec[i]->compoundLaneDividers()), true);
+        lDataVec[i]->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+    for (const auto& mat :
+         lDataVec[i]->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+      compoundLaneDividers.push_back(mat);
+    }
+    for (const auto& mat :
+         lDataVec[i]->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+      compoundLaneDividers.push_back(mat);
+    }
     std::vector<Eigen::MatrixXd> compoundCenterlines =
-        getPointMatrices(getValidElements(lDataVec[i]->compoundCenterlines()), true);
+        lDataVec[i]->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Centerline);
 
     switch (i) {
       case 0: {
@@ -121,14 +129,74 @@ TEST_F(MLConverterTest, MapDataSaveLoad) {
   saveLaneData("/tmp/lane_data_save_test.xml", lDataVec, false);
   std::vector<LaneDataPtr> lDataLoaded = loadLaneData("/tmp/lane_data_save_test.xml", false);
   EXPECT_EQ(lDataVec.size(), lDataLoaded.size());
-  EXPECT_EQ(lDataVec.front()->compoundCenterlines().size(), lDataLoaded.front()->compoundCenterlines().size());
-  EXPECT_EQ(lDataVec.front()->compoundRoadBorders().size(), lDataLoaded.front()->compoundRoadBorders().size());
-  EXPECT_EQ(lDataVec.back()->compoundLaneDividers().size(), lDataLoaded.back()->compoundLaneDividers().size());
+  EXPECT_EQ(
+      lDataVec.front()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Centerline).size(),
+      lDataLoaded.front()
+          ->getTensorInstanceData(true, false)
+          .compoundLineStringsOfType(LineStringType::Centerline)
+          .size());
+  EXPECT_EQ(
+      lDataVec.front()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::RoadBorder).size(),
+      lDataLoaded.front()
+          ->getTensorInstanceData(true, false)
+          .compoundLineStringsOfType(LineStringType::RoadBorder)
+          .size());
+  std::vector<Eigen::MatrixXd> backLaneDividersOrig =
+      lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat :
+       lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+    backLaneDividersOrig.push_back(mat);
+  }
+  for (const auto& mat :
+       lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+    backLaneDividersOrig.push_back(mat);
+  }
+  std::vector<Eigen::MatrixXd> backLaneDividersLoaded =
+      lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat :
+       lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+    backLaneDividersLoaded.push_back(mat);
+  }
+  for (const auto& mat :
+       lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+    backLaneDividersLoaded.push_back(mat);
+  }
+  EXPECT_EQ(backLaneDividersOrig.size(), backLaneDividersLoaded.size());
 
   saveLaneData("/tmp/lane_data_save_test.bin", lDataVec, true);
   lDataLoaded = loadLaneData("/tmp/lane_data_save_test.bin", true);
   EXPECT_EQ(lDataVec.size(), lDataLoaded.size());
-  EXPECT_EQ(lDataVec.front()->compoundCenterlines().size(), lDataLoaded.front()->compoundCenterlines().size());
-  EXPECT_EQ(lDataVec.front()->compoundRoadBorders().size(), lDataLoaded.front()->compoundRoadBorders().size());
-  EXPECT_EQ(lDataVec.back()->compoundLaneDividers().size(), lDataLoaded.back()->compoundLaneDividers().size());
+  EXPECT_EQ(
+      lDataVec.front()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Centerline).size(),
+      lDataLoaded.front()
+          ->getTensorInstanceData(true, false)
+          .compoundLineStringsOfType(LineStringType::Centerline)
+          .size());
+  EXPECT_EQ(
+      lDataVec.front()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::RoadBorder).size(),
+      lDataLoaded.front()
+          ->getTensorInstanceData(true, false)
+          .compoundLineStringsOfType(LineStringType::RoadBorder)
+          .size());
+  backLaneDividersOrig =
+      lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat :
+       lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+    backLaneDividersOrig.push_back(mat);
+  }
+  for (const auto& mat :
+       lDataVec.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+    backLaneDividersOrig.push_back(mat);
+  }
+  backLaneDividersLoaded =
+      lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat :
+       lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+    backLaneDividersLoaded.push_back(mat);
+  }
+  for (const auto& mat :
+       lDataLoaded.back()->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+    backLaneDividersLoaded.push_back(mat);
+  }
+  EXPECT_EQ(backLaneDividersOrig.size(), backLaneDividersLoaded.size());
 }

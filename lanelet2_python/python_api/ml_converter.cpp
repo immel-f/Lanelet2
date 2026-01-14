@@ -183,12 +183,20 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("Virtual", LineStringType::Virtual)
       .value("Centerline", LineStringType::Centerline)
       .value("Unknown", LineStringType::Unknown)
-      .value("DrivableArea", LineStringType::DrivableArea);
+      .value("DrivableArea", LineStringType::DrivableArea)
+      .value("Divider", LineStringType::Divider);
 
-  // LineStringTypeGrouping is a vector of vector of LineStringType
-  typedef std::vector<std::vector<LineStringType>> LineStringTypeGrouping;
-  class_<LineStringTypeGrouping>("LineStringTypeGrouping",
-                                 "Type grouping for compound instances: list of lists of LineStringTypes")
+  // LineStringTypeGrouping is a vector of pairs mapping LineStringType lists to representative LineStringType
+  typedef std::pair<std::vector<LineStringType>, LineStringType> LineStringTypeGroupingPair;
+  class_<LineStringTypeGroupingPair>("LineStringTypeGroupingPair",
+                                     "Pair of LineStringType list and representative LineStringType")
+      .def_readwrite("types", &LineStringTypeGroupingPair::first)
+      .def_readwrite("representative", &LineStringTypeGroupingPair::second);
+
+  typedef std::vector<std::pair<std::vector<LineStringType>, LineStringType>> LineStringTypeGrouping;
+  class_<LineStringTypeGrouping>(
+      "LineStringTypeGrouping",
+      "Type grouping for compound instances: maps LineStringType lists to representative types")
       .def(vector_indexing_suite<LineStringTypeGrouping>());
 
   def("getDefaultLineStringTypeGrouping", &getDefaultLineStringTypeGrouping,
@@ -199,7 +207,8 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       "Get MapTR default simple grouping: RoadBorderMerged grouping with all lane dividers merged as well (including "
       "dashed and solid, excluding Virtual)");
   def("getM3TRDefaultGrouping", &getM3TRDefaultGrouping,
-      "Get M3TR default grouping: RoadBorderMerged grouping, merges Solid, SolidSolid, SolidDashed, and DashedSolid LineStringTypes");
+      "Get M3TR default grouping: RoadBorderMerged grouping, merges Solid, SolidSolid, SolidDashed, and DashedSolid "
+      "LineStringTypes");
 
   class_<OrientedRect>("OrientedRect", "Oriented rectangle for feature crop area", no_init)
       .add_property("bounds", make_function(&OrientedRect::bounds_const, return_value_policy<copy_const_reference>()));
@@ -311,26 +320,11 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .staticmethod("build")
             .def("processAll", &LaneData::processAll)
             .def("lineStringsOfType", &LaneData::lineStringsOfType, (arg("type")))
-            .add_property("roadBorders", make_function(&LaneData::roadBorders))
-            .add_property("laneDividers", make_function(&LaneData::laneDividers))
-            .add_property("drivableAreaBorders", make_function(&LaneData::drivableAreaBorders))
+            .def("validLineStringsOfType", &LaneData::validLineStringsOfType, (arg("type")))
             .def("compoundLineStringsOfType", &LaneData::compoundLineStringsOfType, (arg("type")))
+            .def("validCompoundLineStringsOfType", &LaneData::validCompoundLineStringsOfType, (arg("type")))
             .def("associatedCpdLineStringsOfType", &LaneData::associatedCpdLineStringsOfType,
                  (arg("mapId"), arg("type")))
-            .add_property("compoundRoadBorders", make_function(&LaneData::compoundRoadBorders))
-            .add_property("compoundLaneDividers", make_function(&LaneData::compoundLaneDividers))
-            .add_property("compoundCenterlines", make_function(&LaneData::compoundCenterlines))
-            .add_property("compoundDrivableAreaBorders", make_function(&LaneData::compoundDrivableAreaBorders))
-            .add_property("validRoadBorders", &LaneData::validRoadBorders)
-            .add_property("validLaneDividers", &LaneData::validLaneDividers)
-            .add_property("validCompoundRoadBorders", &LaneData::validCompoundRoadBorders)
-            .add_property("validCompoundLaneDividers", &LaneData::validCompoundLaneDividers)
-            .add_property("validCompoundCenterlines", &LaneData::validCompoundCenterlines)
-            .add_property("validCompoundDrivableAreaBorders", &LaneData::validCompoundDrivableAreaBorders)
-            .def("associatedCpdRoadBorders", &LaneData::associatedCpdRoadBorders, (arg("mapId")))
-            .def("associatedCpdLaneDividers", &LaneData::associatedCpdLaneDividers, (arg("mapId")))
-            .def("associatedCpdCenterlines", &LaneData::associatedCpdCenterlines, (arg("mapId")))
-            .def("associatedCpdDrivableAreaBorders", &LaneData::associatedCpdDrivableAreaBorders, (arg("mapId")))
             .add_property("laneletInstances",
                           make_function(&LaneData::laneletInstances, return_value_policy<copy_const_reference>()))
             .add_property("edges", make_function(&LaneData::edges, return_value_policy<copy_const_reference>()))
@@ -338,25 +332,11 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def("getTensorInstanceData", &LaneData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")));
 
     class_<LaneData::TensorInstanceData>("TensorInstanceData", "TensorInstanceData class for LaneData", init<>())
-        .add_property("roadBorders", make_function(&LaneData::TensorInstanceData::roadBorders,
-                                                   return_value_policy<copy_const_reference>()))
-        .add_property("laneDividers", make_function(&LaneData::TensorInstanceData::laneDividers,
-                                                    return_value_policy<copy_const_reference>()))
-        .add_property("laneDividerTypes", make_function(&LaneData::TensorInstanceData::laneDividerTypes,
-                                                        return_value_policy<copy_const_reference>()))
-        .add_property("compoundRoadBorders", make_function(&LaneData::TensorInstanceData::compoundRoadBorders,
-                                                           return_value_policy<copy_const_reference>()))
-        .add_property("compoundLaneDividers", make_function(&LaneData::TensorInstanceData::compoundLaneDividers,
-                                                            return_value_policy<copy_const_reference>()))
-        .add_property("compoundLaneDividerTypes", make_function(&LaneData::TensorInstanceData::compoundLaneDividerTypes,
-                                                                return_value_policy<copy_const_reference>()))
-        .add_property("compoundCenterlines", make_function(&LaneData::TensorInstanceData::compoundCenterlines,
-                                                           return_value_policy<copy_const_reference>()))
+        .def("lineStringsOfType", &LaneData::TensorInstanceData::lineStringsOfType, (arg("type")))
+        .def("compoundLineStringsOfType", &LaneData::TensorInstanceData::compoundLineStringsOfType, (arg("type")))
+        .def("pointMatrixCpdLineStrings", &LaneData::TensorInstanceData::pointMatrixCpdLineStrings, (arg("index")))
         .add_property("uuid",
-                      make_function(&LaneData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()))
-        .def("pointMatrixCpdRoadBorder", &LaneData::TensorInstanceData::pointMatrixCpdRoadBorder, (arg("index")))
-        .def("pointMatrixCpdLaneDivider", &LaneData::TensorInstanceData::pointMatrixCpdLaneDivider, (arg("index")))
-        .def("pointMatrixCpdCenterline", &LaneData::TensorInstanceData::pointMatrixCpdCenterline, (arg("index")));
+                      make_function(&LaneData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()));
   }
 
   {

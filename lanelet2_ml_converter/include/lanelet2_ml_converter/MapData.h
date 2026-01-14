@@ -62,37 +62,25 @@ class LaneData {
  public:
   struct TensorInstanceData {
    public:
-    const std::vector<MatrixXd>& roadBorders() { return roadBorders_; }
-    const std::vector<MatrixXd>& laneDividers() { return laneDividers_; }
-    const std::vector<int>& laneDividerTypes() { return laneDividerTypes_; }
-    const std::vector<MatrixXd>& compoundRoadBorders() { return compoundRoadBorders_; }
-    const std::vector<MatrixXd>& compoundLaneDividers() { return compoundLaneDividers_; }
-    const std::vector<int>& compoundLaneDividerTypes() { return compoundLaneDividerTypes_; }
-    const std::vector<MatrixXd>& compoundCenterlines() { return compoundCenterlines_; }
+    // Filter linestrings/compoundlinestrings by type
+    std::vector<MatrixXd> lineStringsOfType(LineStringType type) const;
+    std::vector<MatrixXd> compoundLineStringsOfType(LineStringType type) const;
+
+    // Get associated compound linestring for a given index in compoundLineStrings_
+    CompoundLaneLineStringInstancePtr pointMatrixCpdLineStrings(size_t index);
+
     const std::string& uuid() { return uuid_; }
-    CompoundLaneLineStringInstancePtr pointMatrixCpdRoadBorder(
-        size_t index);  // get feature associated to point matrix index
-    CompoundLaneLineStringInstancePtr pointMatrixCpdLaneDivider(
-        size_t index);  // get feature associated to point matrix index
-    CompoundLaneLineStringInstancePtr pointMatrixCpdCenterline(
-        size_t index);  // get feature associated to point matrix index
     friend class LaneData;
 
    private:
-    std::vector<MatrixXd> roadBorders_;
-    std::vector<MatrixXd> laneDividers_;
-    std::vector<int> laneDividerTypes_;
-    std::vector<MatrixXd> compoundRoadBorders_;
-    std::vector<MatrixXd> compoundLaneDividers_;
-    std::vector<int> compoundLaneDividerTypes_;
-    std::vector<MatrixXd> compoundCenterlines_;
+    // All linestrings organized by type for efficient access
+    std::vector<std::pair<LineStringType, MatrixXd>> lineStrings_;
+    // All compound linestrings organized by type for efficient access
+    std::vector<std::pair<LineStringType, MatrixXd>> compoundLineStrings_;
+    // Mapping from compoundLineStrings_ matrix index to compound feature instance
+    std::map<size_t, CompoundLaneLineStringInstancePtr> compoundLineStringInstances_;
+
     std::string uuid_;
-    std::map<size_t, CompoundLaneLineStringInstancePtr>
-        pointMatrixCpdRoadBorder_;  // relates point matrix index to compound features
-    std::map<size_t, CompoundLaneLineStringInstancePtr>
-        pointMatrixCpdLaneDivider_;  // relates point matrix index to compound features, tfData_ must be initialized
-    std::map<size_t, CompoundLaneLineStringInstancePtr>
-        pointMatrixCpdCenterline_;  // relates point matrix index to compound features, tfData_ must be initialized
   };
 
   LaneData() noexcept : uuid_{boost::lexical_cast<std::string>(boost::uuids::random_generator()())} {}
@@ -103,36 +91,14 @@ class LaneData {
                   double roll = 0);
 
   LaneLineStringInstances lineStringsOfType(LineStringType type) const;
-  // Road borders (LineStringType::RoadBorder)
-  LaneLineStringInstances roadBorders() const;
-  // Lane dividers (LineStringType::Dashed, Solid, SolidSolid, SolidDashed, DashedSolid, Virtual)
-  LaneLineStringInstances laneDividers() const;
-  // Drivable area borders (LineStringType::DrivableArea)
-  LaneLineStringInstances drivableAreaBorders() const;
+
+  LaneLineStringInstances validLineStringsOfType(LineStringType type) const;
 
   CompoundLaneLineStringInstanceList compoundLineStringsOfType(LineStringType type) const;
-  CompoundLaneLineStringInstanceList compoundRoadBorders() const;
-  CompoundLaneLineStringInstanceList compoundLaneDividers() const;
-  CompoundLaneLineStringInstanceList compoundCenterlines() const;
-  CompoundLaneLineStringInstanceList compoundDrivableAreaBorders() const;
 
-  LaneLineStringInstances validRoadBorders() const;
-  LaneLineStringInstances validLaneDividers() const;
-
-  CompoundLaneLineStringInstanceList validCompoundRoadBorders() const;
-  CompoundLaneLineStringInstanceList validCompoundLaneDividers() const;
-  CompoundLaneLineStringInstanceList validCompoundCenterlines() const;
-  CompoundLaneLineStringInstanceList validCompoundDrivableAreaBorders() const;
+  CompoundLaneLineStringInstanceList validCompoundLineStringsOfType(LineStringType type) const;
 
   CompoundLaneLineStringInstanceList associatedCpdLineStringsOfType(Id mapId, LineStringType type) const;
-  CompoundLaneLineStringInstanceList associatedCpdRoadBorders(
-      Id mapId);  // get features associated to map element with id
-  CompoundLaneLineStringInstanceList associatedCpdLaneDividers(
-      Id mapId);  // get features associated to map element with id
-  CompoundLaneLineStringInstanceList associatedCpdCenterlines(
-      Id mapId);  // get features associated to map element with id
-  CompoundLaneLineStringInstanceList associatedCpdDrivableAreaBorders(
-      Id mapId);  // get features associated to map element with id
 
   const LaneletInstances& laneletInstances() { return laneletInstances_; }
   const Edges& edges() { return edges_; }
