@@ -7,10 +7,10 @@ namespace ml_converter {
 
 using namespace internal;
 
-LaneDataPtr LaneData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
                             const LineStringTypeGrouping& lineStringTypeGrouping) {
-  LaneDataPtr data = std::make_shared<LaneData>();
+  MapDataPtr data = std::make_shared<MapData>();
   data->lineStringTypeGrouping_ = lineStringTypeGrouping;
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
@@ -20,7 +20,7 @@ LaneDataPtr LaneData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing
   return data;
 }
 
-void LaneData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
+void MapData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
                                   lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                   traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
@@ -53,7 +53,7 @@ void LaneData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
   }
 }
 
-void LaneData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
+void MapData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
                                    lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
@@ -84,7 +84,7 @@ void LaneData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
   }
 }
 
-void LaneData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
+void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
                                     lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
@@ -119,7 +119,7 @@ bool isLaneletInPath(const ConstLanelets& path, const ConstLanelet& ll) {
 
 // Idea: algorithm for paths that starts with LLs with no previous, splits on junctions and terminates on LLs with
 // no successors
-void LaneData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
+void MapData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
                         ConstLanelet start, ConstLanelets initPath) {
   initPath.push_back(start);
   ConstLanelet current = start;
@@ -143,7 +143,7 @@ void LaneData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
   paths.push_back(initPath);
 }
 
-LineStringType LaneData::getLineStringTypeFromId(Id id) {
+LineStringType MapData::getLineStringTypeFromId(Id id) {
   LaneLineStringInstances::iterator it = laneLineStrings_.find(id);
   if (it != laneLineStrings_.end()) {
     return it->second->type();
@@ -158,7 +158,7 @@ LaneLineStringInstancePtr makeInverted(const LaneLineStringInstancePtr& feat) {
       feat->laneletIDs(), !feat->inverted());
 }
 
-LaneLineStringInstancePtr LaneData::getLineStringFeatFromId(Id id, bool inverted) {
+LaneLineStringInstancePtr MapData::getLineStringFeatFromId(Id id, bool inverted) {
   LaneLineStringInstances::iterator it = laneLineStrings_.find(id);
   if (it != laneLineStrings_.end()) {
     return (inverted == it->second->inverted()) ? it->second : makeInverted(it->second);
@@ -167,7 +167,7 @@ LaneLineStringInstancePtr LaneData::getLineStringFeatFromId(Id id, bool inverted
   }
 }
 
-std::vector<CompoundElsList> LaneData::computeCompoundLeftBorders(const ConstLanelets& path) {
+std::vector<CompoundElsList> MapData::computeCompoundLeftBorders(const ConstLanelets& path) {
   std::vector<CompoundElsList> compoundBorders;
   ConstLanelet start = path.front();
   LineStringType currType = getLineStringTypeFromId(start.leftBound3d().id());
@@ -194,7 +194,7 @@ std::vector<CompoundElsList> LaneData::computeCompoundLeftBorders(const ConstLan
   return compoundBorders;
 }
 
-std::vector<CompoundElsList> LaneData::computeCompoundRightBorders(const ConstLanelets& path) {
+std::vector<CompoundElsList> MapData::computeCompoundRightBorders(const ConstLanelets& path) {
   std::vector<CompoundElsList> compoundBorders;
   ConstLanelet start = path.front();
   LineStringType currType = getLineStringTypeFromId(start.rightBound3d().id());
@@ -221,7 +221,7 @@ std::vector<CompoundElsList> LaneData::computeCompoundRightBorders(const ConstLa
   return compoundBorders;
 }
 
-CompoundLaneLineStringInstancePtr LaneData::computeCompoundCenterline(const ConstLanelets& path,
+CompoundLaneLineStringInstancePtr MapData::computeCompoundCenterline(const ConstLanelets& path,
                                                                       bool ignoreMapElevation) {
   LaneLineStringInstanceList compoundCenterlines;
   for (const auto& ll : path) {
@@ -237,7 +237,7 @@ CompoundLaneLineStringInstancePtr LaneData::computeCompoundCenterline(const Cons
   return std::make_shared<CompoundLaneLineStringInstance>(compoundCenterlines, LineStringType::Centerline);
 }
 
-void LaneData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
+void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
   // Collect all LineStrings from the map with drivable_space_border attribute
   std::vector<Id> drivableAreaIds;
   std::map<Id, std::pair<Id, Id>> endpointIdMap;  // Maps linestring ID to (first_point_id, last_point_id)
@@ -367,7 +367,7 @@ void LaneData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
 
         // Create a compound instance for this chain
         if (!compoundFeatures.empty()) {
-          compoundLineStrings_.push_back(
+          compoundLaneLineStrings_.push_back(
               std::make_shared<CompoundLaneLineStringInstance>(compoundFeatures, LineStringType::DrivableArea));
         }
       }
@@ -446,7 +446,7 @@ void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
   }
 }
 
-void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
+void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                                      lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                      traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   std::vector<CompoundElsList> compoundedBordersAndDividers;
@@ -470,7 +470,7 @@ void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
     insertAndCheckNewCompoundInstances(compoundedBordersAndDividers, compoundedLeft, elInsertIdx);
     std::vector<CompoundElsList> compoundedRight = computeCompoundRightBorders(path);
     insertAndCheckNewCompoundInstances(compoundedBordersAndDividers, compoundedRight, elInsertIdx);
-    compoundLineStrings_.push_back(computeCompoundCenterline(path, ignoreMapElevation));
+    compoundLaneLineStrings_.push_back(computeCompoundCenterline(path, ignoreMapElevation));
   }
   for (const auto& compFeat : compoundedBordersAndDividers) {
     LaneLineStringInstanceList toBeCompounded;
@@ -482,16 +482,16 @@ void LaneData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
       toBeCompounded.push_back(cmpdFeat);
     }
     LineStringType cmpdType = toBeCompounded.front()->type();
-    compoundLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, cmpdType));
+    compoundLaneLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, cmpdType));
   }
 
   // Process drivable area borders
   computeDrivableAreaBorders(localSubmap);
 }
 
-void LaneData::updateAssociatedCpdInstanceIndices() {
-  for (size_t i = 0; i < compoundLineStrings_.size(); i++) {
-    const auto& cpdFeat = compoundLineStrings_[i];
+void MapData::updateAssociatedCpdInstanceIndices() {
+  for (size_t i = 0; i < compoundLaneLineStrings_.size(); i++) {
+    const auto& cpdFeat = compoundLaneLineStrings_[i];
     LineStringType type = cpdFeat->type();
     for (const auto& indFeat : cpdFeat->features()) {
       for (const auto& id : indFeat->laneletIDs()) {
@@ -504,11 +504,11 @@ void LaneData::updateAssociatedCpdInstanceIndices() {
   }
 }
 
-bool LaneData::processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,
+bool MapData::processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,
                           double roll) {
   bool validLineStrings = processInstances(laneLineStrings_, bbox, paramType, nPoints, pitch, roll);
   bool validLaneletInstances = processInstances(laneletInstances_, bbox, paramType, nPoints, pitch, roll);
-  bool validCompoundLineStrings = processInstances(compoundLineStrings_, bbox, paramType, nPoints, pitch, roll);
+  bool validCompoundLineStrings = processInstances(compoundLaneLineStrings_, bbox, paramType, nPoints, pitch, roll);
 
   if (validLineStrings && validLaneletInstances && validCompoundLineStrings) {
     return true;
@@ -517,33 +517,33 @@ bool LaneData::processAll(const OrientedRect& bbox, const ParametrizationType& p
   }
 }
 
-LaneData::TensorInstanceData LaneData::getTensorInstanceData(bool pointsIn2d, bool ignoreBuffer) {
+MapData::TensorInstanceData MapData::getTensorInstanceData(bool pointsIn2d, bool ignoreBuffer) {
   if (!tfData_.has_value() || ignoreBuffer) {
-    tfData_ = LaneData::TensorInstanceData();
+    tfData_ = MapData::TensorInstanceData();
     tfData_->uuid_ = uuid_;
 
-    // Collect all valid linestrings with their types
-    size_t lineStringMatrixIdx = 0;
+    // Collect all valid linestrings organized by type
+    size_t globalLineStringIdx = 0;
     for (const auto& type_pair : laneLineStrings_) {
       if (type_pair.second->valid()) {
         std::vector<MatrixXd> matrices = type_pair.second->pointMatrices(pointsIn2d);
+        LineStringType type = type_pair.second->type();
         for (const auto& mat : matrices) {
-          tfData_->lineStrings_.push_back({type_pair.second->type(), mat});
-          lineStringMatrixIdx++;
+          tfData_->lineStringsByType_[type].push_back(mat);
+          globalLineStringIdx++;
         }
       }
     }
 
-    // Collect all valid compound linestrings with their types and build instance map
-    size_t compoundLineStringMatrixIdx = 0;
-    for (size_t i = 0; i < compoundLineStrings_.size(); ++i) {
-      const auto& cpdFeat = compoundLineStrings_[i];
+    // Collect all valid compound linestrings organized by type
+    for (size_t i = 0; i < compoundLaneLineStrings_.size(); ++i) {
+      const auto& cpdFeat = compoundLaneLineStrings_[i];
       if (cpdFeat->valid()) {
         std::vector<MatrixXd> matrices = cpdFeat->pointMatrices(pointsIn2d);
+        LineStringType type = cpdFeat->type();
         for (const auto& mat : matrices) {
-          tfData_->compoundLineStrings_.push_back({cpdFeat->type(), mat});
-          tfData_->compoundLineStringInstances_[compoundLineStringMatrixIdx] = cpdFeat;
-          compoundLineStringMatrixIdx++;
+          tfData_->compoundLineStringsByType_[type].push_back(mat);
+          tfData_->compoundLineStringInstancesByType_[type].push_back(cpdFeat);
         }
       }
     }
@@ -551,42 +551,40 @@ LaneData::TensorInstanceData LaneData::getTensorInstanceData(bool pointsIn2d, bo
   return tfData_.value();
 }
 
-std::vector<MatrixXd> LaneData::TensorInstanceData::lineStringsOfType(LineStringType type) const {
-  std::vector<MatrixXd> result;
-  for (const auto& pair : lineStrings_) {
-    if (pair.first == type) {
-      result.push_back(pair.second);
-    }
+std::vector<MatrixXd> MapData::TensorInstanceData::lineStringsOfType(LineStringType type) const {
+  auto it = lineStringsByType_.find(type);
+  if (it != lineStringsByType_.end()) {
+    return it->second;
   }
-  return result;
+  return std::vector<MatrixXd>();
 }
 
-std::vector<MatrixXd> LaneData::TensorInstanceData::compoundLineStringsOfType(LineStringType type) const {
-  std::vector<MatrixXd> result;
-  for (const auto& pair : compoundLineStrings_) {
-    if (pair.first == type) {
-      result.push_back(pair.second);
-    }
+std::vector<MatrixXd> MapData::TensorInstanceData::compoundLineStringsOfType(LineStringType type) const {
+  auto it = compoundLineStringsByType_.find(type);
+  if (it != compoundLineStringsByType_.end()) {
+    return it->second;
   }
-  return result;
+  return std::vector<MatrixXd>();
 }
 
-CompoundLaneLineStringInstancePtr LaneData::TensorInstanceData::pointMatrixCpdLineStrings(size_t index) {
-  CompoundLaneLineStringInstancePtr feat;
-  try {
-    feat = compoundLineStringInstances_.at(index);
-  } catch (const std::out_of_range& e) {
-    throw std::out_of_range("A point matrix with index " + std::to_string(index) + " does not exist!");
+CompoundLaneLineStringInstancePtr MapData::TensorInstanceData::pointMatrixCpdLineStrings(LineStringType type,
+                                                                                          size_t index) {
+  auto typeIt = compoundLineStringInstancesByType_.find(type);
+  if (typeIt == compoundLineStringInstancesByType_.end()) {
+    throw std::out_of_range("No compound line strings exist for the given type!");
   }
-  return feat;
+  if (index >= typeIt->second.size()) {
+    throw std::out_of_range("A point matrix with type-local index " + std::to_string(index) + " does not exist!");
+  }
+  return typeIt->second[index];
 }
 
-CompoundLaneLineStringInstanceList LaneData::associatedCpdLineStringsOfType(Id mapId, LineStringType type) const {
+CompoundLaneLineStringInstanceList MapData::associatedCpdLineStringsOfType(Id mapId, LineStringType type) const {
   CompoundLaneLineStringInstanceList assoFeats;
   try {
     const auto& typeIndices = associatedCpdLineStringsIndices_.at(type);
     for (const auto& idx : typeIndices.at(mapId)) {
-      assoFeats.push_back(compoundLineStrings_[idx]);
+      assoFeats.push_back(compoundLaneLineStrings_[idx]);
     }
   } catch (const std::out_of_range&) {
     return assoFeats;
@@ -594,7 +592,7 @@ CompoundLaneLineStringInstanceList LaneData::associatedCpdLineStringsOfType(Id m
   return assoFeats;
 }
 
-LaneLineStringInstances LaneData::lineStringsOfType(LineStringType type) const {
+LaneLineStringInstances MapData::lineStringsOfType(LineStringType type) const {
   LaneLineStringInstances result;
   for (const auto& pair : laneLineStrings_) {
     if (pair.second->type() == type) {
@@ -604,9 +602,9 @@ LaneLineStringInstances LaneData::lineStringsOfType(LineStringType type) const {
   return result;
 }
 
-CompoundLaneLineStringInstanceList LaneData::compoundLineStringsOfType(LineStringType type) const {
+CompoundLaneLineStringInstanceList MapData::compoundLineStringsOfType(LineStringType type) const {
   CompoundLaneLineStringInstanceList result;
-  for (const auto& feat : compoundLineStrings_) {
+  for (const auto& feat : compoundLaneLineStrings_) {
     if (feat->type() == type) {
       result.push_back(feat);
     }
@@ -614,11 +612,11 @@ CompoundLaneLineStringInstanceList LaneData::compoundLineStringsOfType(LineStrin
   return result;
 }
 
-LaneLineStringInstances LaneData::validLineStringsOfType(LineStringType type) const {
+LaneLineStringInstances MapData::validLineStringsOfType(LineStringType type) const {
   return getValidElements(lineStringsOfType(type));
 }
 
-CompoundLaneLineStringInstanceList LaneData::validCompoundLineStringsOfType(LineStringType type) const {
+CompoundLaneLineStringInstanceList MapData::validCompoundLineStringsOfType(LineStringType type) const {
   return getValidElements(compoundLineStringsOfType(type));
 }
 

@@ -222,10 +222,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   def("resampleLineString", &resampleLineString, (arg("polyline"), arg("nPoints")));
   def("cutLineString", &cutLineString, (arg("bbox"), arg("polyline")));
   def("transformLineString", &transformLineString, (arg("bbox"), arg("polyline"), arg("pitch"), arg("roll")));
-  def("saveLaneData", &saveLaneData, (arg("filename"), arg("lDataVec"), arg("binary")));
-  def("loadLaneData", &loadLaneData, (arg("filename"), arg("binary")));
-  def("saveLaneDataMultiFile", &saveLaneDataMultiFile, (arg("path"), arg("filenames"), arg("lDataVec"), arg("binary")));
-  def("loadLaneDataMultiFile", &loadLaneDataMultiFile, (arg("path"), arg("filenames"), arg("binary")));
+  def("saveMapData", &saveMapData, (arg("filename"), arg("mDataVec"), arg("binary")));
+  def("loadMapData", &loadMapData, (arg("filename"), arg("binary")));
+  def("saveMapDataMultiFile", &saveMapDataMultiFile, (arg("path"), arg("filenames"), arg("mDataVec"), arg("binary")));
+  def("loadMapDataMultiFile", &loadMapDataMultiFile, (arg("path"), arg("filenames"), arg("binary")));
 
   class_<MapInstanceWrap, boost::noncopyable>("MapInstance", "Abstract base map feature class", no_init)
       .add_property("wasCut", &MapInstance::wasCut)
@@ -241,6 +241,13 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
                                                                          "Abstract line string feature class", no_init)
       .add_property("rawInstance",
                     make_function(&LineStringInstance::rawInstance, return_value_policy<copy_const_reference>()))
+      .add_property("cutInstance",
+                    make_function(&LineStringInstance::cutInstance, return_value_policy<copy_const_reference>()))
+      .add_property("cutAndResampledInstance", make_function(&LineStringInstance::cutAndResampledInstance,
+                                                             return_value_policy<copy_const_reference>()))
+      .add_property("cutResampledAndTransformedInstance",
+                    make_function(&LineStringInstance::cutResampledAndTransformedInstance,
+                                  return_value_policy<copy_const_reference>()))
       .def("computeInstanceVectors", pure_virtual(&LineStringInstance::computeInstanceVectors),
            (arg("onlyPoints"), arg("pointsIn2d")))
       .def("process", pure_virtual(&LineStringInstance::process),
@@ -251,13 +258,6 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       "LaneLineStringInstance", "Lane line string feature class",
       init<BasicLineString3d, Id, LineStringType, Ids, bool>())
       .def(init<>())
-      .add_property("cutInstance",
-                    make_function(&LaneLineStringInstance::cutInstance, return_value_policy<copy_const_reference>()))
-      .add_property("cutAndResampledInstance", make_function(&LaneLineStringInstance::cutAndResampledInstance,
-                                                             return_value_policy<copy_const_reference>()))
-      .add_property("cutResampledAndTransformedInstance",
-                    make_function(&LaneLineStringInstance::cutResampledAndTransformedInstance,
-                                  return_value_policy<copy_const_reference>()))
       .add_property("type", &LaneLineStringInstance::type)
       .add_property("inverted", &LaneLineStringInstance::inverted)
       .add_property("typeInt", &LaneLineStringInstance::typeInt)
@@ -311,32 +311,33 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .def_readwrite("isLaneChange", &Edge::isLaneChange_);
 
   {
-    scope inLaneData =
-        class_<LaneData, LaneDataPtr>("LaneData", "Class for holding, accessing and processing of lane data")
+    scope inMapData =
+        class_<MapData, MapDataPtr>("MapData", "Class for holding, accessing and processing of map data")
             .def(init<>())
-            .def("build", &LaneData::build,
+            .def("build", &MapData::build,
                  (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"), arg("ignoreMapElevation") = false,
                   arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping()))
             .staticmethod("build")
-            .def("processAll", &LaneData::processAll)
-            .def("lineStringsOfType", &LaneData::lineStringsOfType, (arg("type")))
-            .def("validLineStringsOfType", &LaneData::validLineStringsOfType, (arg("type")))
-            .def("compoundLineStringsOfType", &LaneData::compoundLineStringsOfType, (arg("type")))
-            .def("validCompoundLineStringsOfType", &LaneData::validCompoundLineStringsOfType, (arg("type")))
-            .def("associatedCpdLineStringsOfType", &LaneData::associatedCpdLineStringsOfType,
+            .def("processAll", &MapData::processAll)
+            .def("lineStringsOfType", &MapData::lineStringsOfType, (arg("type")))
+            .def("validLineStringsOfType", &MapData::validLineStringsOfType, (arg("type")))
+            .def("compoundLineStringsOfType", &MapData::compoundLineStringsOfType, (arg("type")))
+            .def("validCompoundLineStringsOfType", &MapData::validCompoundLineStringsOfType, (arg("type")))
+            .def("associatedCpdLineStringsOfType", &MapData::associatedCpdLineStringsOfType,
                  (arg("mapId"), arg("type")))
             .add_property("laneletInstances",
-                          make_function(&LaneData::laneletInstances, return_value_policy<copy_const_reference>()))
-            .add_property("edges", make_function(&LaneData::edges, return_value_policy<copy_const_reference>()))
-            .add_property("uuid", make_function(&LaneData::uuid, return_value_policy<copy_const_reference>()))
-            .def("getTensorInstanceData", &LaneData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")));
+                          make_function(&MapData::laneletInstances, return_value_policy<copy_const_reference>()))
+            .add_property("edges", make_function(&MapData::edges, return_value_policy<copy_const_reference>()))
+            .add_property("uuid", make_function(&MapData::uuid, return_value_policy<copy_const_reference>()))
+            .def("getTensorInstanceData", &MapData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")));
 
-    class_<LaneData::TensorInstanceData>("TensorInstanceData", "TensorInstanceData class for LaneData", init<>())
-        .def("lineStringsOfType", &LaneData::TensorInstanceData::lineStringsOfType, (arg("type")))
-        .def("compoundLineStringsOfType", &LaneData::TensorInstanceData::compoundLineStringsOfType, (arg("type")))
-        .def("pointMatrixCpdLineStrings", &LaneData::TensorInstanceData::pointMatrixCpdLineStrings, (arg("index")))
+    class_<MapData::TensorInstanceData>("TensorInstanceData", "TensorInstanceData class for MapData", init<>())
+        .def("lineStringsOfType", &MapData::TensorInstanceData::lineStringsOfType, (arg("type")))
+        .def("compoundLineStringsOfType", &MapData::TensorInstanceData::compoundLineStringsOfType, (arg("type")))
+        .def("pointMatrixCpdLineStrings", &MapData::TensorInstanceData::pointMatrixCpdLineStrings,
+             (arg("type"), arg("index")))
         .add_property("uuid",
-                      make_function(&LaneData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()));
+                      make_function(&MapData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()));
   }
 
   {
@@ -347,13 +348,13 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
     void (MapDataInterface::*setCurrPosAndExtractSubmap6d)(const lanelet::BasicPoint3d &, double, double, double) =
         &MapDataInterface::setCurrPosAndExtractSubmap;
 
-    std::vector<LaneDataPtr> (MapDataInterface::*laneDataBatch2d)(std::vector<BasicPoint2d>, std::vector<double>) =
-        &MapDataInterface::laneDataBatch2d;
-    std::vector<LaneDataPtr> (MapDataInterface::*laneDataBatch4d)(std::vector<BasicPoint3d>, std::vector<double>) =
-        &MapDataInterface::laneDataBatch;
-    std::vector<LaneDataPtr> (MapDataInterface::*laneDataBatch6d)(std::vector<BasicPoint3d>, std::vector<double>,
-                                                                  std::vector<double>, std::vector<double>) =
-        &MapDataInterface::laneDataBatch;
+    std::vector<MapDataPtr> (MapDataInterface::*mapDataBatch2d)(std::vector<BasicPoint2d>, std::vector<double>) =
+        &MapDataInterface::mapDataBatch2d;
+    std::vector<MapDataPtr> (MapDataInterface::*mapDataBatch4d)(std::vector<BasicPoint3d>, std::vector<double>) =
+        &MapDataInterface::mapDataBatch;
+    std::vector<MapDataPtr> (MapDataInterface::*mapDataBatch6d)(std::vector<BasicPoint3d>, std::vector<double>,
+                                                                std::vector<double>, std::vector<double>) =
+        &MapDataInterface::mapDataBatch;
     scope inMapDataInterface =
         class_<MapDataInterface>("MapDataInterface", "Main Interface Class for processing of Lanelet maps",
                                  init<LaneletMapConstPtr>())
@@ -364,13 +365,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def("setCurrPosAndExtractSubmap", setCurrPosAndExtractSubmap4d, (arg("pt"), arg("yaw")))
             .def("setCurrPosAndExtractSubmap", setCurrPosAndExtractSubmap6d,
                  (arg("pt"), arg("yaw"), arg("pitch"), arg("roll")))
-            .def("laneData", &MapDataInterface::laneData, (arg("processAll")))
-            .def("teData", &MapDataInterface::teData, (arg("processAll")))
-            .def("laneDataBatch2d", laneDataBatch2d, (arg("pts"), arg("yaws")))
-            .def("laneDataBatch", laneDataBatch4d, (arg("pts"), arg("yaws")))
-            .def("laneDataBatch", laneDataBatch6d, (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")))
-            .def("laneTEDataBatch", &MapDataInterface::laneTEDataBatch,
-                 (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")));
+            .def("mapData", &MapDataInterface::mapData, (arg("processAll")))
+            .def("mapDataBatch2d", mapDataBatch2d, (arg("pts"), arg("yaws")))
+            .def("mapDataBatch", mapDataBatch4d, (arg("pts"), arg("yaws")))
+            .def("mapDataBatch", mapDataBatch6d, (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")));
 
     class_<MapDataInterface::Configuration>("Configuration", "Configuration class for MapDataInterface", init<>())
         .def(init<LaneletRepresentationType, ParametrizationType, double, double, int>())
@@ -395,7 +393,7 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       boost::geometry::model::ring<BasicPoint2d, true, true, std::vector, std::allocator>>();
   converters::VectorToListConverter<std::vector<double>>();
   converters::VectorToListConverter<std::vector<int>>();
-  converters::VectorToListConverter<std::vector<LaneDataPtr>>();
+  converters::VectorToListConverter<std::vector<MapDataPtr>>();
   converters::VectorToListConverter<std::vector<Edge>>();
   converters::IterableConverter()
       .fromPython<std::vector<MatrixXd>>()
@@ -404,7 +402,7 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .fromPython<std::vector<BasicPoint2d>>()
       .fromPython<std::vector<double>>()
       .fromPython<std::vector<std::string>>()
-      .fromPython<std::vector<LaneDataPtr>>()
+      .fromPython<std::vector<MapDataPtr>>()
       .fromPython<LaneLineStringInstanceList>()
       .fromPython<CompoundLaneLineStringInstanceList>();
   converters::MapToDictConverter<LaneLineStringInstances>();

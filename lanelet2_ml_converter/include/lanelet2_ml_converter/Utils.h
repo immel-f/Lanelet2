@@ -93,9 +93,9 @@ inline TEType teTypeToEnum(const ConstLineString3d& te) {
   Attribute type = te.attributeOr(AttributeName::Type, "");
   Attribute subtype = te.attributeOr(AttributeName::Subtype, "");
   if (type == AttributeValueString::TrafficLight) {
-    return TEType::TrafficLight;
+    return TEType::TLMisc;
   } else if (type == AttributeValueString::TrafficSign) {
-    return TEType::TrafficSign;
+    return TEType::TSMisc;
   } else {
     // throw std::runtime_error("Unexpected Traffic Element Type!");
     return TEType::Unknown;
@@ -109,17 +109,17 @@ std::vector<BasicLineString3d> cutLineString(const OrientedRect& bbox, const Bas
 BasicLineString3d transformLineString(const OrientedRect& bbox, const BasicLineString3d& polyline, double pitch,
                                       double roll);
 
-void saveLaneData(const std::string& filename, const std::vector<LaneDataPtr>& lDataVec,
-                  bool binary);  // saves all in one file
+void saveMapData(const std::string& filename, const std::vector<MapDataPtr>& mDataVec,
+                 bool binary);  // saves all in one file
 
-std::vector<LaneDataPtr> loadLaneData(const std::string& filename, bool binary);  // loads entire vector from one file
+std::vector<MapDataPtr> loadMapData(const std::string& filename, bool binary);  // loads entire vector from one file
 
-void saveLaneDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                           const std::vector<LaneDataPtr>& lDataVec,
-                           bool binary);  // saves in one file per LaneData
+void saveMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
+                          const std::vector<MapDataPtr>& mDataVec,
+                          bool binary);  // saves in one file per LaneData
 
-std::vector<LaneDataPtr> loadLaneDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                                               bool binary);  // loads from one file per LaneData
+std::vector<MapDataPtr> loadMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
+                                             bool binary);  // loads from one file per LaneData
 
 }  // namespace ml_converter
 }  // namespace lanelet

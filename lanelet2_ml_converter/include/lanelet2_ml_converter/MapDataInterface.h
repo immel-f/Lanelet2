@@ -41,24 +41,17 @@ class MapDataInterface {
   void setCurrPosAndExtractSubmap2d(const BasicPoint2d& pt, double yaw);
   void setCurrPosAndExtractSubmap(const BasicPoint3d& pt, double yaw);
   void setCurrPosAndExtractSubmap(const BasicPoint3d& pt, double yaw, double pitch, double roll);
-  LaneDataPtr laneData(bool processAll);
-  TEData teData(bool processAll);
+  MapDataPtr mapData(bool processAll);
 
-  std::vector<LaneDataPtr> laneDataBatch2d(std::vector<BasicPoint2d> pts, std::vector<double> yaws);
-  std::vector<LaneDataPtr> laneDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws);
-  std::vector<LaneDataPtr> laneDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws,
-                                         std::vector<double> pitches, std::vector<double> rolls);
-  std::vector<TEData> laneTEDataBatch(std::vector<BasicPoint2d> pts, std::vector<double> yaws,
-                                      std::vector<double> pitches, std::vector<double> rolls);
+  std::vector<MapDataPtr> mapDataBatch2d(std::vector<BasicPoint2d> pts, std::vector<double> yaws);
+  std::vector<MapDataPtr> mapDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws);
+  std::vector<MapDataPtr> mapDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws,
+                                       std::vector<double> pitches, std::vector<double> rolls);
 
  private:
-  LaneDataPtr getLaneData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                          lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch, double roll,
-                          bool processAll);
-
-  TEData getLaneTEData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                       lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch, double roll,
-                       bool processAll);
+  MapDataPtr getMapData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
+                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch, double roll,
+                        bool processAll);
 
   LaneletMapConstPtr laneletMap_;
   LaneletSubmapConstPtr localSubmap_;

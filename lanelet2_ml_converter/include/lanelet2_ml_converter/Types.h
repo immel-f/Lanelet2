@@ -28,8 +28,39 @@ enum class LineStringType {
   Unknown,
   DrivableArea,
   Divider,
+  BikeMarkingDashed,
+  BikeMarkingSolid,
+  GuardRail,
+  PedestrianCrossing,
+  ZebraCrossing,
 };
-enum class TEType { TrafficLight, TrafficSign, Unknown };
+
+// TL = Traffic Light, TS = Traffic Sign
+enum class TEType {
+  TLCar,
+  TLBike,
+  TLPedestrian,
+  TLMisc,
+  TSMisc,
+  TSNoEntry,
+  TSTurnRight,
+  TSTurnLeft,
+  TSTurnLeftOrRight,
+  TSGoStraight,
+  TSGoStraightOrRight,
+  TSGoStraightOrLeft,
+  TSPassRight,
+  TSPassLeft,
+  TSOneWayStreet,
+  TSYield,
+  TSRightOfWay,
+  TSPriorityRoad,
+  TSStop,
+  TSCrossbuck,
+  TSRoundabout,
+  StopLine,
+  Unknown
+};
 
 struct OrientedRect {
   BasicPoint3d center;
@@ -66,13 +97,19 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
       {{LineStringType::Centerline}, LineStringType::Centerline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
+      {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
+      {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
+      {{LineStringType::GuardRail}, LineStringType::GuardRail},
+      {{LineStringType::PedestrianCrossing}, LineStringType::PedestrianCrossing},
+      {{LineStringType::ZebraCrossing}, LineStringType::ZebraCrossing},
   };
 }
 
 /// @brief Get a RoadBorderMerged grouping: merges road border with fence, curbstone high and curbstone low
 inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
   return {
-      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},
+      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
+        LineStringType::GuardRail},
        LineStringType::RoadBorder},
       {{LineStringType::Dashed}, LineStringType::Dashed},
       {{LineStringType::Solid}, LineStringType::Solid},
@@ -83,6 +120,10 @@ inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
       {{LineStringType::Virtual}, LineStringType::Virtual},
       {{LineStringType::Centerline}, LineStringType::Centerline},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
+      {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
+      {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
+      {{LineStringType::PedestrianCrossing}, LineStringType::PedestrianCrossing},
+      {{LineStringType::ZebraCrossing}, LineStringType::ZebraCrossing},
   };
 }
 
@@ -90,10 +131,11 @@ inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
 /// dashed and solid, excluding Virtual)
 inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
   return {
-      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},
+      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
+        LineStringType::GuardRail},
        LineStringType::RoadBorder},
       {{LineStringType::Dashed, LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed,
-        LineStringType::DashedSolid},
+        LineStringType::DashedSolid, LineStringType::BikeMarkingDashed, LineStringType::BikeMarkingSolid},
        LineStringType::Divider},
       {{LineStringType::CurbstoneHigh}, LineStringType::CurbstoneHigh},
       {{LineStringType::CurbstoneLow}, LineStringType::CurbstoneLow},
@@ -102,6 +144,7 @@ inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
       {{LineStringType::Centerline}, LineStringType::Centerline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
+      {{LineStringType::PedestrianCrossing, LineStringType::ZebraCrossing}, LineStringType::PedestrianCrossing},
   };
 }
 
@@ -109,15 +152,21 @@ inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
 /// LineStringTypes
 inline LineStringTypeGrouping getM3TRDefaultGrouping() {
   return {
-      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow},
+      {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
+        LineStringType::GuardRail},
        LineStringType::RoadBorder},
-      {{LineStringType::Dashed}, LineStringType::Dashed},
-      {{LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed, LineStringType::DashedSolid},
+      {{LineStringType::Dashed, LineStringType::BikeMarkingDashed}, LineStringType::Dashed},
+      {{LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed, LineStringType::DashedSolid,
+        LineStringType::BikeMarkingSolid},
        LineStringType::Solid},
       {{LineStringType::Virtual}, LineStringType::Virtual},
       {{LineStringType::Centerline}, LineStringType::Centerline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
+      {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
+      {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
+      {{LineStringType::PedestrianCrossing}, LineStringType::PedestrianCrossing},
+      {{LineStringType::PedestrianCrossing, LineStringType::ZebraCrossing}, LineStringType::PedestrianCrossing},
   };
 }
 

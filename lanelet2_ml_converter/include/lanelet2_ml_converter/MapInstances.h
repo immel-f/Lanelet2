@@ -55,6 +55,10 @@ class LineStringInstance : public MapInstance {
   virtual bool process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints,
                        double pitch = 0, double roll = 0) = 0;
 
+  const BasicLineStrings3d& cutInstance() const { return cutInstances_; }
+  const BasicLineStrings3d& cutAndResampledInstance() const { return cutAndResampledInstances_; }
+  const BasicLineStrings3d& cutResampledAndTransformedInstance() const { return cutResampledAndTransformedInstances_; }
+
   template <class Archive>
   friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::LineStringInstance& feat,
                                               const unsigned int /*version*/);
@@ -63,6 +67,9 @@ class LineStringInstance : public MapInstance {
 
  protected:
   BasicLineString3d rawInstance_;
+  BasicLineStrings3d cutInstances_;
+  BasicLineStrings3d cutAndResampledInstances_;
+  BasicLineStrings3d cutResampledAndTransformedInstances_;
   LineStringInstance() {}
   LineStringInstance(const BasicLineString3d& feature, Id mapID) : MapInstance(mapID), rawInstance_{feature} {}
 };
@@ -83,9 +90,6 @@ class LaneLineStringInstance : public LineStringInstance {
   virtual std::vector<MatrixXd> pointMatrices(
       bool pointsIn2d) const override;  // uses processedInstance_ when available
 
-  const BasicLineStrings3d& cutInstance() const { return cutInstances_; }
-  const BasicLineStrings3d& cutAndResampledInstance() const { return cutAndResampledInstances_; }
-  const BasicLineStrings3d& cutResampledAndTransformedInstance() const { return cutResampledAndTransformedInstances_; }
   LineStringType type() const { return type_; }
   bool inverted() const { return inverted_; }
   int typeInt() const { return static_cast<int>(type_); }
@@ -97,9 +101,6 @@ class LaneLineStringInstance : public LineStringInstance {
                                               const unsigned int /*version*/);
 
  protected:
-  BasicLineStrings3d cutInstances_;
-  BasicLineStrings3d cutAndResampledInstances_;
-  BasicLineStrings3d cutResampledAndTransformedInstances_;
   LineStringType type_;
   bool inverted_{false};  // = inverted compared to element with that Id in lineStringLayer
   Ids laneletIDs_;
@@ -123,6 +124,10 @@ class TEInstance : public LineStringInstance {
   virtual std::vector<MatrixXd> pointMatrices(bool pointsIn2d) const override;
 
   const TEType& teType() { return teType_; }
+
+  template <class Archive>
+  friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::TEInstance& feat,
+                                              const unsigned int /*version*/);
 
  private:
   TEType teType_;

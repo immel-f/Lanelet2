@@ -51,6 +51,11 @@ void serialize(Archive& ar, lanelet::ml_converter::LineStringType& type, const u
 }
 
 template <class Archive>
+void serialize(Archive& ar, lanelet::ml_converter::TEType& type, const unsigned int /*version*/) {
+  ar& BOOST_SERIALIZATION_NVP(type);
+}
+
+template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::MapInstance& feat, const unsigned int /*version*/) {
   ar& BOOST_SERIALIZATION_NVP(feat.initialized_);
   ar& BOOST_SERIALIZATION_NVP(feat.wasCut_);
@@ -62,18 +67,25 @@ template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::LineStringInstance& feat, const unsigned int /*version*/) {
   ar& make_nvp("MapInstance", boost::serialization::base_object<lanelet::ml_converter::MapInstance>(feat));
   ar& BOOST_SERIALIZATION_NVP(feat.rawInstance_);
+  ar& BOOST_SERIALIZATION_NVP(feat.cutInstances_);
+  ar& BOOST_SERIALIZATION_NVP(feat.cutAndResampledInstances_);
+  ar& BOOST_SERIALIZATION_NVP(feat.cutResampledAndTransformedInstances_);
 }
 
 template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::LaneLineStringInstance& feat, const unsigned int /*version*/) {
   ar& make_nvp("LineStringInstance",
                boost::serialization::base_object<lanelet::ml_converter::LineStringInstance>(feat));
-  ar& BOOST_SERIALIZATION_NVP(feat.cutInstances_);
-  ar& BOOST_SERIALIZATION_NVP(feat.cutAndResampledInstances_);
-  ar& BOOST_SERIALIZATION_NVP(feat.cutResampledAndTransformedInstances_);
   ar& BOOST_SERIALIZATION_NVP(feat.type_);
   ar& BOOST_SERIALIZATION_NVP(feat.inverted_);
   ar& BOOST_SERIALIZATION_NVP(feat.laneletIDs_);
+}
+
+template <class Archive>
+void serialize(Archive& ar, lanelet::ml_converter::TEInstance& feat, const unsigned int /*version*/) {
+  ar& make_nvp("LineStringInstance",
+               boost::serialization::base_object<lanelet::ml_converter::LineStringInstance>(feat));
+  ar& BOOST_SERIALIZATION_NVP(feat.teType_);
 }
 
 template <class Archive>
@@ -104,19 +116,20 @@ void serialize(Archive& ar, lanelet::ml_converter::Edge& edge, const unsigned in
 }
 
 template <class Archive>
-void serialize(Archive& ar, lanelet::ml_converter::LaneData& lData, const unsigned int /*version*/) {
-  ar& BOOST_SERIALIZATION_NVP(lData.laneLineStrings_);
-  ar& BOOST_SERIALIZATION_NVP(lData.compoundLineStrings_);
-  ar& BOOST_SERIALIZATION_NVP(lData.laneletInstances_);
-  ar& BOOST_SERIALIZATION_NVP(lData.associatedCpdLineStringsIndices_);
-  ar& BOOST_SERIALIZATION_NVP(lData.edges_);
+void serialize(Archive& ar, lanelet::ml_converter::MapData& mData, const unsigned int /*version*/) {
+  ar& BOOST_SERIALIZATION_NVP(mData.laneLineStrings_);
+  ar& BOOST_SERIALIZATION_NVP(mData.compoundLaneLineStrings_);
+  ar& BOOST_SERIALIZATION_NVP(mData.teInstances_);
+  ar& BOOST_SERIALIZATION_NVP(mData.laneletInstances_);
+  ar& BOOST_SERIALIZATION_NVP(mData.associatedCpdLineStringsIndices_);
+  ar& BOOST_SERIALIZATION_NVP(mData.edges_);
 }
 
 }  // namespace serialization
 }  // namespace boost
 
 // prevent unneccessary boost serialization xml tags
-// BOOST_CLASS_IMPLEMENTATION(lanelet::ml_converter::LaneData, boost::serialization::object_serializable);
+// BOOST_CLASS_IMPLEMENTATION(lanelet::ml_converter::MapData, boost::serialization::object_serializable);
 // BOOST_CLASS_IMPLEMENTATION(lanelet::ml_converter::Edge, boost::serialization::object_serializable);
 // BOOST_CLASS_IMPLEMENTATION(lanelet::ml_converter::LaneletInstance, boost::serialization::object_serializable);
 // BOOST_CLASS_IMPLEMENTATION(lanelet::ml_converter::LaneLineStringInstance, boost::serialization::object_serializable);

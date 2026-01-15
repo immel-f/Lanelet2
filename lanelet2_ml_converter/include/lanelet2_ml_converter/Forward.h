@@ -36,9 +36,10 @@ enum class ParametrizationType;
 class MapInstance;
 class LineStringInstance;
 class LaneLineStringInstance;
+class TEInstance;
 class CompoundLaneLineStringInstance;
 class LaneletInstance;
-class LaneData;
+class MapData;
 
 }  // namespace ml_converter
 }  // namespace lanelet
@@ -56,6 +57,9 @@ template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::LaneLineStringInstance& feat, const unsigned int /*version*/);
 
 template <class Archive>
+void serialize(Archive& ar, lanelet::ml_converter::TEInstance& feat, const unsigned int /*version*/);
+
+template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::CompoundLaneLineStringInstance& feat,
                const unsigned int /*version*/);
 
@@ -63,7 +67,7 @@ template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::LaneletInstance& feat, const unsigned int /*version*/);
 
 template <class Archive>
-void serialize(Archive& ar, lanelet::ml_converter::LaneData& feat, const unsigned int /*version*/);
+void serialize(Archive& ar, lanelet::ml_converter::MapData& feat, const unsigned int /*version*/);
 
 }  // namespace serialization
 }  // namespace boost

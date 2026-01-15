@@ -48,22 +48,22 @@ MapDataInterface::MapDataInterface(LaneletMapConstPtr laneletMap, Configuration 
       config_{config},
       trafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)} {}
 
-LaneDataPtr MapDataInterface::getLaneData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                                          lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch,
-                                          double roll, bool processAll) {
-  LaneDataPtr laneData = LaneData::build(localSubmap, localSubmapGraph, trafficRules_, config_.ignoreMapElevation,
-                                         config_.lineStringTypeGrouping);
+MapDataPtr MapDataInterface::getMapData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
+                                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch,
+                                        double roll, bool processAll) {
+  MapDataPtr mapData = MapData::build(localSubmap, localSubmapGraph, trafficRules_, config_.ignoreMapElevation,
+                                      config_.lineStringTypeGrouping);
   if (processAll) {
-    laneData->processAll(bbox, config_.paramType, config_.nPoints, pitch, roll);
+    mapData->processAll(bbox, config_.paramType, config_.nPoints, pitch, roll);
   }
-  return laneData;
+  return mapData;
 }
 
-std::vector<LaneDataPtr> MapDataInterface::laneDataBatch2d(std::vector<BasicPoint2d> pts, std::vector<double> yaws) {
+std::vector<MapDataPtr> MapDataInterface::mapDataBatch2d(std::vector<BasicPoint2d> pts, std::vector<double> yaws) {
   if (pts.size() != yaws.size()) {
     throw std::runtime_error("Unequal sizes of pts and rotation angles!");
   }
-  std::vector<LaneDataPtr> lDataVec;
+  std::vector<MapDataPtr> mDataVec;
   for (size_t i = 0; i < pts.size(); i++) {
     LaneletSubmapConstPtr localSubmap =
         extractSubmap(laneletMap_, pts[i], config_.submapExtentLongitudinal, config_.submapExtentLateral);
@@ -71,21 +71,21 @@ std::vector<LaneDataPtr> MapDataInterface::laneDataBatch2d(std::vector<BasicPoin
         lanelet::routing::RoutingGraph::build(*localSubmap, *trafficRules_);
     OrientedRect bbox = getRotatedRect(BasicPoint3d{pts[i].x(), pts[i].y(), 0}, config_.submapExtentLongitudinal,
                                        config_.submapExtentLateral, yaws[i], true);
-    lDataVec.push_back(getLaneData(localSubmap, bbox, localSubmapGraph, 0, 0, true));
+    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, 0, 0, true));
   }
-  return lDataVec;
+  return mDataVec;
 }
 
-std::vector<LaneDataPtr> MapDataInterface::laneDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws) {
-  return laneDataBatch(pts, yaws, std::vector<double>(yaws.size(), 0), std::vector<double>(yaws.size(), 0));
+std::vector<MapDataPtr> MapDataInterface::mapDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws) {
+  return mapDataBatch(pts, yaws, std::vector<double>(yaws.size(), 0), std::vector<double>(yaws.size(), 0));
 }
 
-std::vector<LaneDataPtr> MapDataInterface::laneDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws,
-                                                         std::vector<double> pitches, std::vector<double> rolls) {
+std::vector<MapDataPtr> MapDataInterface::mapDataBatch(std::vector<BasicPoint3d> pts, std::vector<double> yaws,
+                                                       std::vector<double> pitches, std::vector<double> rolls) {
   if ((pts.size() != yaws.size()) || (pts.size() != pitches.size()) || (pts.size() != rolls.size())) {
     throw std::runtime_error("Unequal sizes of pts and rotation angles!");
   }
-  std::vector<LaneDataPtr> lDataVec;
+  std::vector<MapDataPtr> mDataVec;
   for (size_t i = 0; i < pts.size(); i++) {
     LaneletSubmapConstPtr localSubmap =
         extractSubmap(laneletMap_, pts[i].head(2), config_.submapExtentLongitudinal, config_.submapExtentLateral);
@@ -93,28 +93,12 @@ std::vector<LaneDataPtr> MapDataInterface::laneDataBatch(std::vector<BasicPoint3
         lanelet::routing::RoutingGraph::build(*localSubmap, *trafficRules_);
     OrientedRect bbox =
         getRotatedRect(pts[i], config_.submapExtentLongitudinal, config_.submapExtentLateral, yaws[i], false);
-    lDataVec.push_back(getLaneData(localSubmap, bbox, localSubmapGraph, pitches[i], rolls[i], true));
+    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, pitches[i], rolls[i], true));
   }
-  return lDataVec;
+  return mDataVec;
 }
 
-std::vector<TEData> MapDataInterface::laneTEDataBatch(std::vector<BasicPoint2d> pts, std::vector<double> yaws,
-                                                      std::vector<double> pitches, std::vector<double> rolls) {
-  throw std::runtime_error("Not implemented yet!");
-}
-
-bool isTe(ConstLineString3d ls) {
-  std::string type = ls.attribute(AttributeName::Type).value();
-  return type == AttributeValueString::TrafficLight || type == AttributeValueString::TrafficSign;
-}
-
-TEData MapDataInterface::getLaneTEData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                                       lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch,
-                                       double roll, bool processAll) {
-  throw std::runtime_error("Not implemented yet!");
-}
-
-LaneDataPtr MapDataInterface::laneData(bool processAll) {
+MapDataPtr MapDataInterface::mapData(bool processAll) {
   if (!currPos_) {
     throw InvalidObjectStateError(
         "Your current position is not set! Call setCurrPosAndExtractSubmap() before trying to get the data!");
@@ -131,16 +115,7 @@ LaneDataPtr MapDataInterface::laneData(bool processAll) {
     throw InvalidObjectStateError(
         "Your current roll angle is not set! Call setCurrPosAndExtractSubmap() before trying to get the data!");
   }
-  return getLaneData(localSubmap_, *currBbox_, localSubmapGraph_, *currPitch_, *currRoll_, processAll);
-}
-
-TEData MapDataInterface::teData(bool processAll) {
-  if (!currPos_) {
-    throw InvalidObjectStateError(
-        "Your current position is not set! Call setCurrPosAndExtractSubmap() before trying to get the data!");
-  }
-  throw std::runtime_error("Not implemented yet!");
-  return TEData();
+  return getMapData(localSubmap_, *currBbox_, localSubmapGraph_, *currPitch_, *currRoll_, processAll);
 }
 
 }  // namespace ml_converter

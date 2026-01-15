@@ -164,80 +164,80 @@ BasicLineString3d transformLineString(const OrientedRect& bbox, const BasicLineS
   return rotatedPolyline;
 }
 
-void saveLaneData(const std::string& filename, const std::vector<LaneDataPtr>& lDataVec, bool binary) {
+void saveMapData(const std::string& filename, const std::vector<MapDataPtr>& mDataVec, bool binary) {
   if (binary) {
     std::ofstream fs(filename, std::ofstream::binary);
     if (!fs.good()) {
       throw std::runtime_error("Failed to open archive " + filename);
     }
     boost::archive::binary_oarchive oa(fs);
-    oa << lDataVec;
+    oa << mDataVec;
   } else {
     std::ofstream fs(filename);
     if (!fs.good()) {
       throw std::runtime_error("Failed to open archive " + filename);
     }
     boost::archive::xml_oarchive oa(fs, boost::archive::no_header);
-    oa << BOOST_SERIALIZATION_NVP(lDataVec);
+    oa << BOOST_SERIALIZATION_NVP(mDataVec);
   }
 }
 
-std::vector<LaneDataPtr> loadLaneData(const std::string& filename, bool binary) {
+std::vector<MapDataPtr> loadMapData(const std::string& filename, bool binary) {
   if (!fs::exists(fs::path(filename))) {
     throw std::runtime_error("Could not find file under " + filename);
   }
-  std::vector<LaneDataPtr> lDataVec;
+  std::vector<MapDataPtr> mDataVec;
   if (binary) {
     std::ifstream fs(filename, std::ifstream::binary);
     if (!fs.good()) {
       throw std::runtime_error("Failed to open archive " + filename);
     }
     boost::archive::binary_iarchive ia(fs);
-    ia >> lDataVec;
+    ia >> mDataVec;
   } else {
     std::ifstream fs(filename);
     if (!fs.good()) {
       throw std::runtime_error("Failed to open archive " + filename);
     }
     boost::archive::xml_iarchive ia(fs, boost::archive::no_header);
-    ia >> BOOST_SERIALIZATION_NVP(lDataVec);
+    ia >> BOOST_SERIALIZATION_NVP(mDataVec);
   }
 
-  return lDataVec;
+  return mDataVec;
 }
 
-void saveLaneDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                           const std::vector<LaneDataPtr>& lDataVec, bool binary) {
-  if (filenames.size() != lDataVec.size()) {
+void saveMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
+                           const std::vector<MapDataPtr>& mDataVec, bool binary) {
+  if (filenames.size() != mDataVec.size()) {
     throw std::runtime_error("Unequal number of file names and LaneData objects!");
   }
   for (size_t i = 0; i < filenames.size(); i++) {
     const auto& filename = filenames[i];
-    const auto& lData = lDataVec[i];
+    const auto& mData = mDataVec[i];
     if (binary) {
       std::ofstream fs(path + filename, std::ofstream::binary);
       if (!fs.good()) {
         throw std::runtime_error("Failed to open archive " + filename);
       }
       boost::archive::binary_oarchive oa(fs);
-      oa << lDataVec;
+      oa << mDataVec;
     } else {
       std::ofstream fs(path + filename);
       if (!fs.good()) {
         throw std::runtime_error("Failed to open archive " + filename);
       }
       boost::archive::xml_oarchive oa(fs, boost::archive::no_header);
-      oa << BOOST_SERIALIZATION_NVP(lData);
+      oa << BOOST_SERIALIZATION_NVP(mData);
     }
   }
 }
 
-std::vector<LaneDataPtr> loadLaneDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
+std::vector<MapDataPtr> loadMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
                                                bool binary) {
-  std::vector<LaneDataPtr> lDataVec;
+  std::vector<MapDataPtr> mDataVec;
   for (size_t i = 0; i < filenames.size(); i++) {
     const auto& filename = filenames[i];
-    LaneDataPtr lData;
+    MapDataPtr mData;
     if (!fs::exists(fs::path(path + filename))) {
       throw std::runtime_error("Could not find file under " + filename);
     }
@@ -247,18 +247,18 @@ std::vector<LaneDataPtr> loadLaneDataMultiFile(const std::string& path, const st
         throw std::runtime_error("Failed to open archive " + filename);
       }
       boost::archive::binary_iarchive ia(fs);
-      ia >> lData;
+      ia >> mData;
     } else {
       std::ifstream fs(path + filename);
       if (!fs.good()) {
         throw std::runtime_error("Failed to open archive " + filename);
       }
       boost::archive::xml_iarchive ia(fs, boost::archive::no_header);
-      ia >> BOOST_SERIALIZATION_NVP(lData);
+      ia >> BOOST_SERIALIZATION_NVP(mData);
     }
-    lDataVec.push_back(lData);
+    mDataVec.push_back(mData);
   }
-  return lDataVec;
+  return mDataVec;
 }
 }  // namespace ml_converter
 }  // namespace lanelet

@@ -19,7 +19,7 @@
 namespace lanelet {
 namespace ml_converter {
 
-using LaneDataPtr = std::shared_ptr<LaneData>;
+using MapDataPtr = std::shared_ptr<MapData>;
 
 struct Edge {
   Edge() = default;
@@ -58,7 +58,7 @@ std::map<Id, std::shared_ptr<T>> getValidElements(const std::map<Id, std::shared
   return res;
 }
 
-class LaneData {
+class MapData {
  public:
   struct TensorInstanceData {
    public:
@@ -66,27 +66,27 @@ class LaneData {
     std::vector<MatrixXd> lineStringsOfType(LineStringType type) const;
     std::vector<MatrixXd> compoundLineStringsOfType(LineStringType type) const;
 
-    // Get associated compound linestring for a given index in compoundLineStrings_
-    CompoundLaneLineStringInstancePtr pointMatrixCpdLineStrings(size_t index);
+    // Get associated compound linestring for a given type and index within that type
+    CompoundLaneLineStringInstancePtr pointMatrixCpdLineStrings(LineStringType type, size_t index);
 
     const std::string& uuid() { return uuid_; }
-    friend class LaneData;
+    friend class MapData;
 
    private:
-    // All linestrings organized by type for efficient access
-    std::vector<std::pair<LineStringType, MatrixXd>> lineStrings_;
-    // All compound linestrings organized by type for efficient access
-    std::vector<std::pair<LineStringType, MatrixXd>> compoundLineStrings_;
-    // Mapping from compoundLineStrings_ matrix index to compound feature instance
-    std::map<size_t, CompoundLaneLineStringInstancePtr> compoundLineStringInstances_;
+    // All linestrings organized by type for efficient O(1) lookup
+    std::map<LineStringType, std::vector<MatrixXd>> lineStringsByType_;
+    // All compound linestrings organized by type for efficient O(1) lookup
+    std::map<LineStringType, std::vector<MatrixXd>> compoundLineStringsByType_;
+    // Mapping from type to vector of compound feature instances (index is implicit in vector position)
+    std::map<LineStringType, std::vector<CompoundLaneLineStringInstancePtr>> compoundLineStringInstancesByType_;
 
     std::string uuid_;
   };
 
-  LaneData() noexcept : uuid_{boost::lexical_cast<std::string>(boost::uuids::random_generator()())} {}
-  static LaneDataPtr build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                           traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false,
-                           const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
+  MapData() noexcept : uuid_{boost::lexical_cast<std::string>(boost::uuids::random_generator()())} {}
+  static MapDataPtr build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                          traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false,
+                          const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                   double roll = 0);
 
@@ -109,7 +109,7 @@ class LaneData {
   TensorInstanceData getTensorInstanceData(bool pointsIn2d, bool ignoreBuffer);
 
   template <class Archive>
-  friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::LaneData& feat,
+  friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::MapData& feat,
                                               const unsigned int /*version*/);
 
  private:
@@ -137,7 +137,10 @@ class LaneData {
   LaneLineStringInstances laneLineStrings_;  // all lane line strings (road borders, lane dividers, ...)
 
   CompoundLaneLineStringInstanceList
-      compoundLineStrings_;  // all compound line strings (road borders, lane dividers, centerlines, ...)
+      compoundLaneLineStrings_;  // all compound line strings (road borders, lane dividers, centerlines, ...)
+
+  TEInstances
+      teInstances_;  // all traffic element instances (stop lines, road markings, traffic lights, traffic signs, ...)
 
   LaneletInstances laneletInstances_;
 
@@ -149,20 +152,6 @@ class LaneData {
 
   Optional<TensorInstanceData> tfData_;
   LineStringTypeGrouping lineStringTypeGrouping_{getDefaultLineStringTypeGrouping()};
-};
-
-/// TODO: finish TE support
-class TEData {
- public:
-  TEData() noexcept {}
-
- private:
-  LaneletInstances laneletInstances;  // node features lanelets
-  TEInstances teInstances;            // node features traffic elements
-
-  Edges edgeList_;  // edge list
-  /// @brief adjacency matrix (sparse). Node indices are assigned as
-  ///        xLane and xTE stacked, with xLane being first
 };
 
 }  // namespace ml_converter

@@ -11,7 +11,7 @@ using namespace lanelet;
 using namespace lanelet::ml_converter;
 using namespace lanelet::ml_converter::tests;
 
-TEST_F(MLConverterTest, LaneData) {  // NOLINT
+TEST_F(MLConverterTest, MapData) {  // NOLINT
   traffic_rules::TrafficRulesPtr trafficRules{
       traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)};
   routing::RoutingGraphConstPtr laneletMapGraph = routing::RoutingGraph::build(*laneletMap, *trafficRules);
@@ -32,32 +32,31 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   // Convert unique_ptr to const shared_ptr
   LaneletSubmapConstPtr laneletSubmap = std::shared_ptr<const LaneletSubmap>(std::move(submapUPtr));
 
-  LaneDataPtr laneData = LaneData::build(laneletSubmap, laneletMapGraph, trafficRules);
+  MapDataPtr mapData = MapData::build(laneletSubmap, laneletMapGraph, trafficRules);
 
-  bool valid = laneData->processAll(bbox, ParametrizationType::LineString, 20);
+  bool valid = mapData->processAll(bbox, ParametrizationType::LineString, 20);
   std::vector<Eigen::MatrixXd> compoundRoadBorders =
-      laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::RoadBorder);
+      mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::RoadBorder);
   std::vector<Eigen::MatrixXd> compoundLaneDividers =
-      laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
-  for (const auto& mat :
-       laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
+      mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat : mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Solid)) {
     compoundLaneDividers.push_back(mat);
   }
   for (const auto& mat :
-       laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
+       mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Virtual)) {
     compoundLaneDividers.push_back(mat);
   }
   std::vector<Eigen::MatrixXd> compoundCenterlines =
-      laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Centerline);
+      mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::Centerline);
   std::vector<Eigen::MatrixXd> drivableArea =
-      laneData->getTensorInstanceData(true, false).lineStringsOfType(LineStringType::DrivableArea);
+      mapData->getTensorInstanceData(true, false).lineStringsOfType(LineStringType::DrivableArea);
   std::vector<Eigen::MatrixXd> compoundDrivableArea =
-      laneData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::DrivableArea);
+      mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::DrivableArea);
 
-  EXPECT_TRUE(laneData->laneletInstances().find(2007) != laneData->laneletInstances().end());
-  EXPECT_EQ(laneData->laneletInstances().find(2007)->second->leftBoundary()->mapID(), 1012);
-  EXPECT_TRUE(laneData->lineStringsOfType(LineStringType::RoadBorder).find(1001) !=
-              laneData->lineStringsOfType(LineStringType::RoadBorder).end());
+  EXPECT_TRUE(mapData->laneletInstances().find(2007) != mapData->laneletInstances().end());
+  EXPECT_EQ(mapData->laneletInstances().find(2007)->second->leftBoundary()->mapID(), 1012);
+  EXPECT_TRUE(mapData->lineStringsOfType(LineStringType::RoadBorder).find(1001) !=
+              mapData->lineStringsOfType(LineStringType::RoadBorder).end());
 
   EXPECT_EQ(compoundRoadBorders.size(), 3);
   EXPECT_EQ(compoundLaneDividers.size(), 8);
@@ -65,36 +64,36 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   EXPECT_EQ(drivableArea.size(), 5);
   EXPECT_EQ(compoundDrivableArea.size(), 2);
 
-  EXPECT_EQ(laneData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea).size(), 1);
-  auto assoDrivableAreaList = laneData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea);
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea).size(), 1);
+  auto assoDrivableAreaList = mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea);
   CompoundLaneLineStringInstancePtr assoDrivableArea = assoDrivableAreaList.front();
-  std::cerr << assoDrivableArea->features().back()->mapID() << std::endl;
+  // std::cerr << assoDrivableArea->features().back()->mapID() << std::endl;
   EXPECT_TRUE(assoDrivableArea->features().back()->mapID() == 1021 ||
               assoDrivableArea->features().back()->mapID() == 1023 ||
               assoDrivableArea->features().back()->mapID() == 1022);
 
-  EXPECT_EQ(laneData->associatedCpdLineStringsOfType(2001, LineStringType::RoadBorder).size(), 1);
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2001, LineStringType::RoadBorder).size(), 1);
   CompoundLaneLineStringInstancePtr assoBorder =
-      laneData->associatedCpdLineStringsOfType(2001, LineStringType::RoadBorder).front();
+      mapData->associatedCpdLineStringsOfType(2001, LineStringType::RoadBorder).front();
   EXPECT_EQ(assoBorder->features().back()->mapID(), 1000);
   EXPECT_EQ(assoBorder->features().back()->laneletIDs().front(), 2002);
 
   std::vector<CompoundLaneLineStringInstancePtr> ld2004 =
-      laneData->associatedCpdLineStringsOfType(2004, LineStringType::Dashed);
-  for (const auto& mat : laneData->associatedCpdLineStringsOfType(2004, LineStringType::Solid)) {
+      mapData->associatedCpdLineStringsOfType(2004, LineStringType::Dashed);
+  for (const auto& mat : mapData->associatedCpdLineStringsOfType(2004, LineStringType::Solid)) {
     ld2004.push_back(mat);
   }
-  for (const auto& mat : laneData->associatedCpdLineStringsOfType(2004, LineStringType::Virtual)) {
+  for (const auto& mat : mapData->associatedCpdLineStringsOfType(2004, LineStringType::Virtual)) {
     ld2004.push_back(mat);
   }
   EXPECT_EQ(ld2004.size(), 2);
 
   std::vector<CompoundLaneLineStringInstancePtr> ld2009 =
-      laneData->associatedCpdLineStringsOfType(2009, LineStringType::Dashed);
-  for (const auto& mat : laneData->associatedCpdLineStringsOfType(2009, LineStringType::Solid)) {
+      mapData->associatedCpdLineStringsOfType(2009, LineStringType::Dashed);
+  for (const auto& mat : mapData->associatedCpdLineStringsOfType(2009, LineStringType::Solid)) {
     ld2009.push_back(mat);
   }
-  for (const auto& mat : laneData->associatedCpdLineStringsOfType(2009, LineStringType::Virtual)) {
+  for (const auto& mat : mapData->associatedCpdLineStringsOfType(2009, LineStringType::Virtual)) {
     ld2009.push_back(mat);
   }
   EXPECT_EQ(ld2009.size(), 1);
@@ -102,11 +101,11 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   EXPECT_EQ(assoDivider->features().front()->mapID(), 1015);
   EXPECT_EQ(assoDivider->features().front()->laneletIDs().size(), 2);
 
-  EXPECT_EQ(laneData->associatedCpdLineStringsOfType(2003, LineStringType::Centerline).size(), 2);
-  EXPECT_EQ(laneData->associatedCpdLineStringsOfType(2000, LineStringType::Centerline).size(), 1);
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2003, LineStringType::Centerline).size(), 2);
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2000, LineStringType::Centerline).size(), 1);
 
   CompoundLaneLineStringInstancePtr assoCenterline =
-      laneData->associatedCpdLineStringsOfType(2000, LineStringType::Centerline).front();
+      mapData->associatedCpdLineStringsOfType(2000, LineStringType::Centerline).front();
   EXPECT_EQ(assoCenterline->features().front()->mapID(), 2000);
   EXPECT_EQ(assoCenterline->features().front()->laneletIDs().front(), 2000);
 
@@ -124,7 +123,7 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
   //   matplot::plot(x, y, "r")->line_width(3);
   // }
-  // for (const auto& mat : getPointMatrices(laneData->compoundLineStringsOfType(LineStringType::Dashed), true)) {
+  // for (const auto& mat : getPointMatrices(mapData->compoundLineStringsOfType(LineStringType::Dashed), true)) {
   //   std::vector<double> x;
   //   std::vector<double> y;
   //   x.resize(mat.rows());
@@ -133,7 +132,7 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
   //   matplot::plot(x, y, "--bo")->line_width(3);
   // }
-  // for (const auto& mat : getPointMatrices(laneData->compoundLineStringsOfType(LineStringType::Solid), true)) {
+  // for (const auto& mat : getPointMatrices(mapData->compoundLineStringsOfType(LineStringType::Solid), true)) {
   //   std::vector<double> x;
   //   std::vector<double> y;
   //   x.resize(mat.rows());
@@ -142,7 +141,7 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
   //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
   //   matplot::plot(x, y, "b")->line_width(3);
   // }
-  // for (const auto& mat : getPointMatrices(laneData->compoundLineStringsOfType(LineStringType::Virtual), true)) {
+  // for (const auto& mat : getPointMatrices(mapData->compoundLineStringsOfType(LineStringType::Virtual), true)) {
   //   std::vector<double> x;
   //   std::vector<double> y;
   //   x.resize(mat.rows());
@@ -166,7 +165,7 @@ TEST_F(MLConverterTest, LaneData) {  // NOLINT
 
   //   matplot::plot(x, y, "--gs")->line_width(3);
   // }
-  // for (const auto& mat : getPointMatrices(laneData->compoundLineStringsOfType(LineStringType::DrivableArea), true)) {
+  // for (const auto& mat : getPointMatrices(mapData->compoundLineStringsOfType(LineStringType::DrivableArea), true)) {
   //   // Draw arrows between consecutive points
   //   for (int i = 0; i < mat.rows() - 1; ++i) {
   //     matplot::arrow(mat(i, 0), mat(i, 1), mat(i + 1, 0), mat(i + 1, 1))->color("r").line_width(2);

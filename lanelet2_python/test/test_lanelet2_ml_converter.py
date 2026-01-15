@@ -28,8 +28,8 @@ class MapDataInterfaceTestCase(unittest.TestCase):
         pos = BasicPoint2d(1, 1)
         mDataIf = MapDataInterface(mymap)
         mDataIf.setCurrPosAndExtractSubmap2d(pos, 0)
-        lData = mDataIf.laneData(True)
-        tfData = lData.getTensorInstanceData(True, False)
+        mData = mDataIf.mapData(True)
+        tfData = mData.getTensorInstanceData(True, False)
         self.assertEqual(len(tfData.compoundLineStringsOfType(
             lanelet2.ml_converter.LineStringType.Centerline)), 2)
         # Check that we can filter lane dividers (Dashed type as example)
