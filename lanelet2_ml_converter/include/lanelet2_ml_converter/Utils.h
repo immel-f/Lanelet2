@@ -92,14 +92,106 @@ inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
 inline TEType teTypeToEnum(const ConstLineString3d& te) {
   Attribute type = te.attributeOr(AttributeName::Type, "");
   Attribute subtype = te.attributeOr(AttributeName::Subtype, "");
-  if (type == AttributeValueString::TrafficLight) {
-    return TEType::TLMisc;
-  } else if (type == AttributeValueString::TrafficSign) {
-    return TEType::TSMisc;
-  } else {
-    // throw std::runtime_error("Unexpected Traffic Element Type!");
-    return TEType::Unknown;
+
+  // Handle stop_line type
+  if (type == "stop_line") {
+    return TEType::StopLine;
   }
+
+  // Handle arrows
+  if (type == "arrow") {
+    if (subtype == "right") {
+      return TEType::ArrowTurnRight;
+    } else if (subtype == "left") {
+      return TEType::ArrowTurnLeft;
+    } else if (subtype == "straight") {
+      return TEType::ArrowGoStraight;
+    } else if (subtype == "straight_right") {
+      return TEType::ArrowGoStraightOrRight;
+    } else if (subtype == "straight_left") {
+      return TEType::ArrowGoStraightOrLeft;
+    } else if (subtype == "left_right") {
+      return TEType::ArrowTurnLeftOrRight;
+    }
+    return TEType::Unknown;  // Unknown arrow subtype
+  }
+
+  // Handle symbols
+  if (type == "symbol") {
+    if (subtype == "bicycle") {
+      return TEType::BikeSymbol;
+    }
+    return TEType::Unknown;  // Unknown symbol subtype
+  }
+
+  // Handle traffic lights
+  if (type == AttributeValueString::TrafficLight) {
+    if (subtype == "red_yellow_green") {
+      return TEType::TLCar;
+    } else if (subtype == "bike") {
+      return TEType::TLBike;
+    } else if (subtype == "pedestrian" || type == "traffic_light_pedestrians") {
+      return TEType::TLPedestrian;
+    }
+    return TEType::TLMisc;  // Default for unknown traffic light subtypes
+  }
+
+  // Handle traffic light pedestrians as separate type
+  if (type == "traffic_light_pedestrians") {
+    return TEType::TLPedestrian;
+  }
+
+  // Handle traffic signs
+  if (type == AttributeValueString::TrafficSign) {
+    // German traffic sign codes based on official StVO regulation
+    // Regulatory signs (200-299)
+    if (subtype == "de205") {
+      return TEType::TSYield;  // Yield sign
+    } else if (subtype == "de206") {
+      return TEType::TSStop;  // Stop sign
+    } else if (subtype == "de209") {
+      return TEType::TSTurnRight;  // Turn right ahead
+    } else if (subtype == "de209-10") {
+      return TEType::TSTurnLeft;  // Turn left ahead
+    } else if (subtype == "de209-30") {
+      return TEType::TSGoStraight;  // Go straight ahead
+    } else if (subtype == "de211") {
+      return TEType::TSTurnRight;  // Turn right (here)
+    } else if (subtype == "de211-10") {
+      return TEType::TSTurnLeft;  // Turn left (here)
+    } else if (subtype == "de214") {
+      return TEType::TSGoStraightOrRight;  // Go straight or turn right ahead
+    } else if (subtype == "de214-10") {
+      return TEType::TSGoStraightOrLeft;  // Go straight or turn left ahead
+    } else if (subtype == "de214-30") {
+      return TEType::TSTurnLeftOrRight;  // Turn left or right ahead
+    } else if (subtype == "de215") {
+      return TEType::TSRoundabout;  // Roundabout
+    } else if (subtype == "de220-10" || subtype == "de220-20") {
+      return TEType::TSOneWayStreet;  // One-way street
+    } else if (subtype == "de222") {
+      return TEType::TSPassRight;  // Pass on the right
+    } else if (subtype == "de222-10") {
+      return TEType::TSPassLeft;  // Pass on the left
+    } else if (subtype == "de267") {
+      return TEType::TSNoEntry;                       // No entry
+    } else if (subtype.value().find("de274") == 0) {  // de274-* (speed limit signs)
+      return TEType::TSSpeedLimit;
+      // Directional signs (300-399)
+    } else if (subtype == "de301") {
+      return TEType::TSRightOfWay;  // Intersection ahead - right-of-way only for this intersection
+    } else if (subtype == "de306") {
+      return TEType::TSPriorityRoad;                  // Priority road - right-of-way on all following intersections
+    } else if (subtype.value().find("de310") == 0) {  // de310 (town/city limit sign)
+      return TEType::TSMisc;
+    } else if (subtype == "de350-10" || subtype == "de350-20") {
+      return TEType::TSPedestrianCrossing;  // Pedestrian crossing directional signs
+    }
+    return TEType::TSMisc;  // Default for unknown traffic sign subtypes
+  }
+
+  // Default to Unknown if no match found
+  return TEType::Unknown;
 }
 
 BasicLineString3d resampleLineString(const BasicLineString3d& polyline, int32_t nPoints);
