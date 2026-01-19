@@ -59,7 +59,7 @@ enum class TEType {
   TSCrossbuck,
   TSRoundabout,
   TSSpeedLimit,
-  TSPedestrianCrossing, 
+  TSPedestrianCrossing,
   ArrowTurnRight,
   ArrowTurnLeft,
   ArrowTurnLeftOrRight,
@@ -67,6 +67,9 @@ enum class TEType {
   ArrowGoStraightOrRight,
   ArrowGoStraightOrLeft,
   BikeSymbol,
+  Symbol30,
+  Symbol50,
+  Symbol70,
   StopLine,
   Unknown
 };

@@ -117,13 +117,13 @@ class TEInstance : public LineStringInstance {
       : LineStringInstance(feature, mapID), teType_{type} {}
   virtual ~TEInstance() noexcept = default;
 
-  bool process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t /*unused*/, double pitch = 0,
+  bool process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                double roll = 0) override;  // not implemented yet
   std::vector<VectorXd> computeInstanceVectors(bool onlyPoints,
                                                bool pointsIn2d) const override;  // currently uses raw feature only
   virtual std::vector<MatrixXd> pointMatrices(bool pointsIn2d) const override;
 
-  const TEType& teType() { return teType_; }
+  TEType teType() { return teType_; }
 
   template <class Archive>
   friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::TEInstance& feat,

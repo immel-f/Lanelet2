@@ -120,6 +120,12 @@ inline TEType teTypeToEnum(const ConstLineString3d& te) {
   if (type == "symbol") {
     if (subtype == "bicycle") {
       return TEType::BikeSymbol;
+    } else if (subtype == "30") {
+      return TEType::Symbol30;
+    } else if (subtype == "50") {
+      return TEType::Symbol50;
+    } else if (subtype == "70") {
+      return TEType::Symbol70;
     }
     return TEType::Unknown;  // Unknown symbol subtype
   }
@@ -130,7 +136,7 @@ inline TEType teTypeToEnum(const ConstLineString3d& te) {
       return TEType::TLCar;
     } else if (subtype == "bike") {
       return TEType::TLBike;
-    } else if (subtype == "pedestrian" || type == "traffic_light_pedestrians") {
+    } else if (subtype == "pedestrian") {
       return TEType::TLPedestrian;
     }
     return TEType::TLMisc;  // Default for unknown traffic light subtypes

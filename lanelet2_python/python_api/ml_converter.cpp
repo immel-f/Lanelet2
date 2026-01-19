@@ -70,6 +70,37 @@ class LaneLineStringInstanceWrap : public LaneLineStringInstance, public wrapper
   }
 };
 
+class TEInstanceWrap : public TEInstance, public wrapper<TEInstance> {
+ public:
+  TEInstanceWrap() {}
+
+  TEInstanceWrap(const BasicLineString3d &feature, Id mapID, TEType type) : TEInstance(feature, mapID, type) {}
+
+  std::vector<VectorXd> computeInstanceVectors(bool onlyPoints, bool pointsIn2d) const {
+    if (override f = this->get_override("computeInstanceVectors")) return f(onlyPoints, pointsIn2d);
+    return TEInstance::computeInstanceVectors(onlyPoints, pointsIn2d);
+  }
+  std::vector<VectorXd> default_computeInstanceVectors(bool onlyPoints, bool pointsIn2d) const {
+    return this->TEInstance::computeInstanceVectors(onlyPoints, pointsIn2d);
+  }
+  bool process(const OrientedRect &bbox, const ParametrizationType &paramType, int32_t nPoints, double pitch,
+               double roll) {
+    if (override f = this->get_override("process")) return f(bbox, paramType, nPoints, pitch, roll);
+    return TEInstance::process(bbox, paramType, nPoints, pitch, roll);
+  }
+  bool default_process(const OrientedRect &bbox, const ParametrizationType &paramType, int32_t nPoints, double pitch,
+                       double roll) {
+    return this->TEInstance::process(bbox, paramType, nPoints, pitch, roll);
+  }
+  std::vector<MatrixXd> pointMatrices(bool pointsIn2d) const {
+    if (override f = this->get_override("pointMatrices")) return f(pointsIn2d);
+    return TEInstance::pointMatrices(pointsIn2d);
+  }
+  std::vector<MatrixXd> default_pointMatrices(bool pointsIn2d) const {
+    return this->TEInstance::pointMatrices(pointsIn2d);
+  }
+};
+
 class CompoundLaneLineStringInstanceWrap : public CompoundLaneLineStringInstance,
                                            public wrapper<CompoundLaneLineStringInstance> {
  public:
@@ -186,6 +217,43 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("DrivableArea", LineStringType::DrivableArea)
       .value("Divider", LineStringType::Divider);
 
+  enum_<TEType>("TEType")
+      .value("TLCar", TEType::TLCar)
+      .value("TLBike", TEType::TLBike)
+      .value("TLPedestrian", TEType::TLPedestrian)
+      .value("TLMisc", TEType::TLMisc)
+      .value("TSMisc", TEType::TSMisc)
+      .value("TSNoEntry", TEType::TSNoEntry)
+      .value("TSTurnRight", TEType::TSTurnRight)
+      .value("TSTurnLeft", TEType::TSTurnLeft)
+      .value("TSTurnLeftOrRight", TEType::TSTurnLeftOrRight)
+      .value("TSGoStraight", TEType::TSGoStraight)
+      .value("TSGoStraightOrRight", TEType::TSGoStraightOrRight)
+      .value("TSGoStraightOrLeft", TEType::TSGoStraightOrLeft)
+      .value("TSPassRight", TEType::TSPassRight)
+      .value("TSPassLeft", TEType::TSPassLeft)
+      .value("TSOneWayStreet", TEType::TSOneWayStreet)
+      .value("TSYield", TEType::TSYield)
+      .value("TSRightOfWay", TEType::TSRightOfWay)
+      .value("TSPriorityRoad", TEType::TSPriorityRoad)
+      .value("TSStop", TEType::TSStop)
+      .value("TSCrossbuck", TEType::TSCrossbuck)
+      .value("TSRoundabout", TEType::TSRoundabout)
+      .value("TSSpeedLimit", TEType::TSSpeedLimit)
+      .value("TSPedestrianCrossing", TEType::TSPedestrianCrossing)
+      .value("ArrowTurnRight", TEType::ArrowTurnRight)
+      .value("ArrowTurnLeft", TEType::ArrowTurnLeft)
+      .value("ArrowTurnLeftOrRight", TEType::ArrowTurnLeftOrRight)
+      .value("ArrowGoStraight", TEType::ArrowGoStraight)
+      .value("ArrowGoStraightOrRight", TEType::ArrowGoStraightOrRight)
+      .value("ArrowGoStraightOrLeft", TEType::ArrowGoStraightOrLeft)
+      .value("BikeSymbol", TEType::BikeSymbol)
+      .value("Symbol30", TEType::Symbol30)
+      .value("Symbol50", TEType::Symbol50)
+      .value("Symbol70", TEType::Symbol70)
+      .value("StopLine", TEType::StopLine)
+      .value("Unknown", TEType::Unknown);
+
   // LineStringTypeGrouping is a vector of pairs mapping LineStringType lists to representative LineStringType
   typedef std::pair<std::vector<LineStringType>, LineStringType> LineStringTypeGroupingPair;
   class_<LineStringTypeGroupingPair>("LineStringTypeGroupingPair",
@@ -271,6 +339,16 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .def("pointMatrices", &LaneLineStringInstance::pointMatrices, &LaneLineStringInstanceWrap::default_pointMatrices,
            (arg("pointsIn2d")));
 
+  class_<TEInstanceWrap, bases<LineStringInstance>, TEInstancePtr, boost::noncopyable>(
+      "TEInstance", "Traffic element feature class", init<BasicLineString3d, Id, TEType>())
+      .def(init<>())
+      .add_property("teType", &TEInstance::teType)
+      .def("computeInstanceVectors", &TEInstance::computeInstanceVectors,
+           &TEInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")))
+      .def("process", &TEInstance::process, &TEInstanceWrap::default_process,
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0))
+      .def("pointMatrices", &TEInstance::pointMatrices, &TEInstanceWrap::default_pointMatrices, (arg("pointsIn2d")));
+
   class_<LaneletInstanceWrap, bases<MapInstance>, LaneletInstancePtr, boost::noncopyable>(
       "LaneletInstance", "Lanelet feature class that contains lower level LaneLineStringInstances",
       init<LaneLineStringInstancePtr, LaneLineStringInstancePtr, LaneLineStringInstancePtr, Id>())
@@ -325,17 +403,29 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def("validCompoundLineStringsOfType", &MapData::validCompoundLineStringsOfType, (arg("type")))
             .def("associatedCpdLineStringsOfType", &MapData::associatedCpdLineStringsOfType,
                  (arg("mapId"), arg("type")))
+            .def("teInstancesOfType", &MapData::teInstancesOfType, (arg("type")))
+            .def("validTEInstancesOfType", &MapData::validTEInstancesOfType, (arg("type")))
             .add_property("laneletInstances",
                           make_function(&MapData::laneletInstances, return_value_policy<copy_const_reference>()))
-            .add_property("edges", make_function(&MapData::edges, return_value_policy<copy_const_reference>()))
+            .add_property("llEdges", make_function(&MapData::llEdges, return_value_policy<copy_const_reference>()))
+            .add_property("teEdges", make_function(&MapData::teEdges, return_value_policy<copy_const_reference>()))
+            .add_property("teToCenterlineEdges",
+                          make_function(&MapData::teToCenterlineEdges, return_value_policy<copy_const_reference>()))
+            .add_property("teToTEEdges",
+                          make_function(&MapData::teToTEEdges, return_value_policy<copy_const_reference>()))
             .add_property("uuid", make_function(&MapData::uuid, return_value_policy<copy_const_reference>()))
             .def("getTensorInstanceData", &MapData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")));
 
     class_<MapData::TensorInstanceData>("TensorInstanceData", "TensorInstanceData class for MapData", init<>())
         .def("lineStringsOfType", &MapData::TensorInstanceData::lineStringsOfType, (arg("type")))
         .def("compoundLineStringsOfType", &MapData::TensorInstanceData::compoundLineStringsOfType, (arg("type")))
+        .def("teInstancesOfType", &MapData::TensorInstanceData::teInstancesOfType, (arg("type")))
         .def("pointMatrixCpdLineStrings", &MapData::TensorInstanceData::pointMatrixCpdLineStrings,
              (arg("type"), arg("index")))
+        .add_property("teToCenterlineIndexEdges", make_function(&MapData::TensorInstanceData::teToCenterlineIndexEdges,
+                                                                return_value_policy<copy_const_reference>()))
+        .add_property("teToTEIndexEdges", make_function(&MapData::TensorInstanceData::teToTEIndexEdges,
+                                                        return_value_policy<copy_const_reference>()))
         .add_property("uuid",
                       make_function(&MapData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()));
   }
@@ -395,6 +485,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   converters::VectorToListConverter<std::vector<int>>();
   converters::VectorToListConverter<std::vector<MapDataPtr>>();
   converters::VectorToListConverter<std::vector<Edge>>();
+  converters::VectorToListConverter<TEToCenterlineEdges>();
+  converters::VectorToListConverter<TEToTEEdges>();
+  converters::VectorToListConverter<TEToCenterlineIndexEdges>();
+  converters::VectorToListConverter<TEToTEIndexEdges>();
   converters::IterableConverter()
       .fromPython<std::vector<MatrixXd>>()
       .fromPython<BasicLineString3d>()
@@ -408,8 +502,14 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   converters::MapToDictConverter<LaneLineStringInstances>();
   converters::MapToDictConverter<LaneletInstances>();
   converters::MapToDictConverter<Edges>();
+  converters::MapToDictConverter<TEInstances>();
   DictToMapConverter<LaneLineStringInstances>();
   DictToMapConverter<LaneletInstances>();
+  DictToMapConverter<TEInstances>();
+  converters::PairConverter<std::pair<TEInstancePtr, CompoundLaneLineStringInstancePtr>>();
+  converters::PairConverter<std::pair<TEInstancePtr, TEInstancePtr>>();
+  converters::PyTuple<TEType, size_t, size_t>();
+  converters::PyTuple<TEType, size_t, TEType, size_t>();
   class_<std::vector<bool>>("BoolList").def(vector_indexing_suite<std::vector<bool>>());
 
   def("toPointMatrix", &toPointMatrix, (arg("lString"), arg("pointsIn2d")));

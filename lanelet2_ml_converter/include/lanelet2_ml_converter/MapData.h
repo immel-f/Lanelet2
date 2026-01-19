@@ -42,6 +42,14 @@ struct CompoundElsList {
 }  // namespace internal
 
 using Edges = std::map<Id, std::vector<Edge>>;  // key = id from
+using TEToCenterlineEdges = std::vector<std::pair<TEInstancePtr, CompoundLaneLineStringInstancePtr>>;
+using TEToTEEdges = std::vector<std::pair<TEInstancePtr, TEInstancePtr>>;
+
+// Index-based edge types for TensorInstanceData
+// TEToCenterline: (source_te_type, source_idx, target_centerline_idx)
+// TEToTE: (source_type, source_idx, target_type, target_idx)
+using TEToCenterlineIndexEdges = std::vector<std::tuple<TEType, size_t, size_t>>;
+using TEToTEIndexEdges = std::vector<std::tuple<TEType, size_t, TEType, size_t>>;
 
 template <typename T>
 std::vector<std::shared_ptr<T>> getValidElements(const std::vector<std::shared_ptr<T>>& vec) {
@@ -65,9 +73,14 @@ class MapData {
     // Filter linestrings/compoundlinestrings by type
     std::vector<MatrixXd> lineStringsOfType(LineStringType type) const;
     std::vector<MatrixXd> compoundLineStringsOfType(LineStringType type) const;
+    std::vector<MatrixXd> teInstancesOfType(TEType type) const;
 
     // Get associated compound linestring for a given type and index within that type
     CompoundLaneLineStringInstancePtr pointMatrixCpdLineStrings(LineStringType type, size_t index);
+
+    // Get edge connections with type-local indices
+    const TEToCenterlineIndexEdges& teToCenterlineIndexEdges() const { return teToCenterlineIndexEdges_; }
+    const TEToTEIndexEdges& teToTEIndexEdges() const { return teToTEIndexEdges_; }
 
     const std::string& uuid() { return uuid_; }
     friend class MapData;
@@ -79,6 +92,12 @@ class MapData {
     std::map<LineStringType, std::vector<MatrixXd>> compoundLineStringsByType_;
     // Mapping from type to vector of compound feature instances (index is implicit in vector position)
     std::map<LineStringType, std::vector<CompoundLaneLineStringInstancePtr>> compoundLineStringInstancesByType_;
+    // All traffic elements organized by type for efficient O(1) lookup
+    std::map<TEType, std::vector<MatrixXd>> teInstancesByType_;
+    
+    // Edge connections using type-local indices
+    TEToCenterlineIndexEdges teToCenterlineIndexEdges_;
+    TEToTEIndexEdges teToTEIndexEdges_;
 
     std::string uuid_;
   };
@@ -100,8 +119,15 @@ class MapData {
 
   CompoundLaneLineStringInstanceList associatedCpdLineStringsOfType(Id mapId, LineStringType type) const;
 
+  TEInstances teInstancesOfType(TEType type) const;
+
+  TEInstances validTEInstancesOfType(TEType type) const;
+
   const LaneletInstances& laneletInstances() { return laneletInstances_; }
-  const Edges& edges() { return edges_; }
+  const Edges& llEdges() { return llEdges_; }
+  const Edges& teEdges() { return teEdges_; }
+  const TEToCenterlineEdges& teToCenterlineEdges() const { return teToCenterlineEdges_; }
+  const TEToTEEdges& teToTEEdges() const { return teToTEEdges_; }
   const std::string& uuid() { return uuid_; }
 
   /// The computed data will be buffered, if the underlying features change you need to set ignoreBuffer appropriately
@@ -134,6 +160,16 @@ class MapData {
                                                               bool ignoreMapElevation = false);
   void computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap);
 
+  // Collect non-lane traffic elements
+  void collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  void collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  void collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  void collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  void collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  
+  // Convert teEdges_ to instance pointer associations
+  void convertTEEdges();
+
   LaneLineStringInstances laneLineStrings_;  // all lane line strings (road borders, lane dividers, ...)
 
   CompoundLaneLineStringInstanceList
@@ -147,7 +183,13 @@ class MapData {
   // Maps LineStringType to a map of (mapId -> vector of compound feature indices)
   std::map<LineStringType, std::map<Id, std::vector<size_t>>> associatedCpdLineStringsIndices_;
 
-  Edges edges_;       // edge list for centerlines
+  Edges llEdges_;     // edge list for lanelet/centerline connectivity
+  Edges teEdges_;     // edge list for traffic element connectivity (e.g., traffic light to stop line)
+  
+  // Converted TE edge associations
+  TEToCenterlineEdges teToCenterlineEdges_;
+  TEToTEEdges teToTEEdges_;
+  
   std::string uuid_;  // sample id
 
   Optional<TensorInstanceData> tfData_;

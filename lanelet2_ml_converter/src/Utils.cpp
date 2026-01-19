@@ -48,20 +48,26 @@ LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPo
   BasicPoint2d initRegionRear = {center.x() - 1.1 * maxExtent, center.y() - 1.1 * maxExtent};
   BasicPoint2d initRegionFront = {center.x() + 1.1 * maxExtent, center.y() + 1.1 * maxExtent};
   BoundingBox2d initSearchRegion{initRegionRear, initRegionFront};
-  
+
   // Cast to non-const to use non-const search
   auto nonConstMap = std::const_pointer_cast<LaneletMap>(std::static_pointer_cast<const LaneletMap>(laneletMap));
   Lanelets initRegion = nonConstMap->laneletLayer.search(initSearchRegion);
-  
+
   // Create submap from lanelets
   auto submapPtr = utils::createSubmap(initRegion, {});
-  
+
   // Extract linestrings in the search region and add them to the submap
   LineStrings3d lineStringsInRegion = nonConstMap->lineStringLayer.search(initSearchRegion);
   for (const auto& lineString : lineStringsInRegion) {
     submapPtr->add(lineString);
   }
-  
+
+  // Extract regulatory elements in the search region and add them to the submap
+  RegulatoryElementPtrs regElemsInRegion = nonConstMap->regulatoryElementLayer.search(initSearchRegion);
+  for (const auto& regElem : regElemsInRegion) {
+    submapPtr->add(regElem);
+  }
+
   return submapPtr;
 }
 
@@ -122,17 +128,24 @@ std::vector<BasicLineString3d> cutLineString(const OrientedRect& bbox, const Bas
   // restore z value from closest point on the original linestring
   for (const auto& el : cut2d) {
     BasicLineString3d ls;
+    double lastBestZ;
     for (const auto& pt2d : el) {
       double lastDist = std::numeric_limits<double>::max();
       double bestZ;
       for (const auto& pt : polyline) {
         double currDist = (pt2d - BasicPoint2d(pt.x(), pt.y())).norm();
-        if (currDist < lastDist) {
+        if (currDist <= (lastDist + 1e-2)) {
           lastDist = currDist;
-          bestZ = pt.z();
+          if (abs(lastBestZ - pt.z()) > 1e-2) {
+            bestZ = pt.z();
+          }
         }
       }
+      if (abs(bestZ) < 1e-2) {
+        bestZ = lastBestZ;
+      }
       ls.push_back(BasicPoint3d(pt2d.x(), pt2d.y(), bestZ));
+      lastBestZ = bestZ;
     }
     cut3d.push_back(ls);
   }
@@ -207,7 +220,7 @@ std::vector<MapDataPtr> loadMapData(const std::string& filename, bool binary) {
 }
 
 void saveMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                           const std::vector<MapDataPtr>& mDataVec, bool binary) {
+                          const std::vector<MapDataPtr>& mDataVec, bool binary) {
   if (filenames.size() != mDataVec.size()) {
     throw std::runtime_error("Unequal number of file names and LaneData objects!");
   }
@@ -233,7 +246,7 @@ void saveMapDataMultiFile(const std::string& path, const std::vector<std::string
 }
 
 std::vector<MapDataPtr> loadMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                                               bool binary) {
+                                             bool binary) {
   std::vector<MapDataPtr> mDataVec;
   for (size_t i = 0; i < filenames.size(); i++) {
     const auto& filename = filenames[i];

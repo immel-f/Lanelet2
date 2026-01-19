@@ -113,6 +113,7 @@ template <class Archive>
 void serialize(Archive& ar, lanelet::ml_converter::Edge& edge, const unsigned int /*version*/) {
   ar& BOOST_SERIALIZATION_NVP(edge.el1_);
   ar& BOOST_SERIALIZATION_NVP(edge.el2_);
+  ar& BOOST_SERIALIZATION_NVP(edge.isLaneChange_);
 }
 
 template <class Archive>
@@ -122,7 +123,10 @@ void serialize(Archive& ar, lanelet::ml_converter::MapData& mData, const unsigne
   ar& BOOST_SERIALIZATION_NVP(mData.teInstances_);
   ar& BOOST_SERIALIZATION_NVP(mData.laneletInstances_);
   ar& BOOST_SERIALIZATION_NVP(mData.associatedCpdLineStringsIndices_);
-  ar& BOOST_SERIALIZATION_NVP(mData.edges_);
+  ar& BOOST_SERIALIZATION_NVP(mData.llEdges_);
+  ar& BOOST_SERIALIZATION_NVP(mData.teEdges_);
+  ar& BOOST_SERIALIZATION_NVP(mData.teToCenterlineEdges_);
+  ar& BOOST_SERIALIZATION_NVP(mData.teToTEEdges_);
 }
 
 }  // namespace serialization

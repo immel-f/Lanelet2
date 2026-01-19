@@ -1,5 +1,9 @@
 #include "lanelet2_ml_converter/MapData.h"
 
+#include <iostream>
+
+#include "lanelet2_core/geometry/LineString.h"
+#include "lanelet2_core/geometry/Polygon.h"
 #include "lanelet2_ml_converter/Utils.h"
 
 namespace lanelet {
@@ -8,8 +12,8 @@ namespace ml_converter {
 using namespace internal;
 
 MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                            traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
-                            const LineStringTypeGrouping& lineStringTypeGrouping) {
+                          traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
+                          const LineStringTypeGrouping& lineStringTypeGrouping) {
   MapDataPtr data = std::make_shared<MapData>();
   data->lineStringTypeGrouping_ = lineStringTypeGrouping;
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
@@ -17,12 +21,23 @@ MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::
   data->initLaneletInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->updateAssociatedCpdInstanceIndices();
+
+  // Collect non-lane traffic elements
+  data->collectStopLines(localSubmap, ignoreMapElevation);
+  data->collectArrows(localSubmap, ignoreMapElevation);
+  data->collectTrafficLights(localSubmap, ignoreMapElevation);
+  data->collectTrafficSigns(localSubmap, ignoreMapElevation);
+  data->collectSymbols(localSubmap, ignoreMapElevation);
+
+  // Convert TE edges to instance associations
+  data->convertTEEdges();
+
   return data;
 }
 
 void MapData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
-                                  lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                  traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                 lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                                 traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
     if (!trafficRules->canPass(ll)) {
       continue;
@@ -48,14 +63,14 @@ void MapData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
     Optional<ConstLanelet> adjLeftLL = localSubmapGraph->adjacentLeft(ll);
 
     if (leftLL) {
-      edges_[ll.id()].push_back(Edge(ll.id(), leftLL->id(), true));
+      llEdges_[ll.id()].push_back(Edge(ll.id(), leftLL->id(), true));
     }
   }
 }
 
 void MapData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
-                                   lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                   traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                  lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                                  traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
     if (!trafficRules->canPass(ll)) {
       continue;
@@ -79,14 +94,14 @@ void MapData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
     Optional<ConstLanelet> rightLL = localSubmapGraph->right(ll);
     Optional<ConstLanelet> adjRightLL = localSubmapGraph->adjacentRight(ll);
     if (rightLL) {
-      edges_[ll.id()].push_back(Edge(ll.id(), rightLL->id(), true));
+      llEdges_[ll.id()].push_back(Edge(ll.id(), rightLL->id(), true));
     }
   }
 }
 
 void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
-                                    lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                   lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                                   traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
     if (!trafficRules->canPass(ll)) {
       continue;
@@ -120,7 +135,7 @@ bool isLaneletInPath(const ConstLanelets& path, const ConstLanelet& ll) {
 // Idea: algorithm for paths that starts with LLs with no previous, splits on junctions and terminates on LLs with
 // no successors
 void MapData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
-                        ConstLanelet start, ConstLanelets initPath) {
+                       ConstLanelet start, ConstLanelets initPath) {
   initPath.push_back(start);
   ConstLanelet current = start;
   ConstLanelets successorLLs = localSubmapGraph->following(current, false);
@@ -129,14 +144,14 @@ void MapData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, 
       if (isLaneletInPath(initPath, successorLLs[i])) {
         continue;
       }
-      edges_[current.id()].push_back(Edge(current.id(), successorLLs[i].id(), false));
+      llEdges_[current.id()].push_back(Edge(current.id(), successorLLs[i].id(), false));
       getPaths(localSubmapGraph, paths, successorLLs[i], initPath);
     }
     if (isLaneletInPath(initPath, successorLLs.front())) {
       break;
     }
     initPath.push_back(successorLLs.front());
-    edges_[current.id()].push_back(Edge(current.id(), successorLLs.front().id(), false));
+    llEdges_[current.id()].push_back(Edge(current.id(), successorLLs.front().id(), false));
     current = successorLLs.front();
     successorLLs = localSubmapGraph->following(current, false);
   }
@@ -222,7 +237,7 @@ std::vector<CompoundElsList> MapData::computeCompoundRightBorders(const ConstLan
 }
 
 CompoundLaneLineStringInstancePtr MapData::computeCompoundCenterline(const ConstLanelets& path,
-                                                                      bool ignoreMapElevation) {
+                                                                     bool ignoreMapElevation) {
   LaneLineStringInstanceList compoundCenterlines;
   for (const auto& ll : path) {
     BasicLineString3d centerlineLString = ll.centerline3d().basicLineString();
@@ -375,6 +390,225 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
   }
 }
 
+Optional<Id> findNearestIntersectingLanelet(const ConstLineString3d& lineString, LaneletSubmapConstPtr& localSubmap,
+                                            bool requireIntersection = true, double maxDistance = 1.0) {
+  // Convert to 2D hybrid linestring
+  ConstHybridLineString2d ls2d = utils::to2D(utils::toHybrid(lineString));
+
+  // Calculate centroid for nearest lanelet query
+  BasicPoint2d centroid(0.0, 0.0);
+  for (const auto& pt : lineString) {
+    centroid.x() += pt.x();
+    centroid.y() += pt.y();
+  }
+  centroid.x() /= lineString.size();
+  centroid.y() /= lineString.size();
+
+  // Get only the nearest lanelet to the centroid
+  ConstLanelets nearestLanelets = localSubmap->laneletLayer.nearest(centroid, 1);
+
+  if (!nearestLanelets.empty()) {
+    const auto& ll = nearestLanelets.front();
+
+    // Get lanelet's 2D polygon using built-in function
+    CompoundHybridPolygon2d laneletPolygon = utils::to2D(utils::toHybrid(ll.polygon3d()));
+
+    if (requireIntersection) {
+      // Check if linestring intersects with lanelet polygon
+      if (geometry::intersects(ls2d, laneletPolygon)) {
+        return ll.id();
+      }
+    } else {
+      // Check if distance to lanelet centerline is below threshold
+      ConstHybridLineString2d centerline2d = utils::to2D(utils::toHybrid(ll.centerline()));
+      double distance = geometry::distance(ls2d, centerline2d);
+      if (distance <= maxDistance) {
+        return ll.id();
+      }
+    }
+  }
+  return {};
+}
+
+void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+    if (type == "stop_line") {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
+
+      TEType teType = teTypeToEnum(lineString);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+
+      // Find the nearest lanelet within distance threshold
+      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap, false, 1.0);
+      if (laneletId) {
+        teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
+      }
+    }
+  }
+}
+
+void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+    if (type == "arrow") {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
+
+      TEType teType = teTypeToEnum(lineString);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+
+      // Find the nearest intersecting lanelet
+      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);
+      if (laneletId) {
+        teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
+      }
+    }
+  }
+}
+
+void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+    if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians") {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
+
+      TEType teType = teTypeToEnum(lineString);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+
+      // Find associated stop line via regulatory elements
+      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
+      for (const auto& regElem : regElemsOwningLs) {
+        // Check if this is a TrafficLight regulatory element
+        if (regElem->attribute(AttributeName::Subtype).value() == "traffic_light") {
+          // Get the stop line from the regulatory element using template syntax
+          auto stopLines = regElem->getParameters<ConstLineString3d>(RoleName::RefLine);
+          if (!stopLines.empty()) {
+            Id stopLineId = stopLines.front().id();
+            // Check if this stop line is in our teInstances_ (already collected)
+            if (teInstances_.find(stopLineId) != teInstances_.end()) {
+              teEdges_[lsId].push_back(Edge(lsId, stopLineId, false));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void MapData::collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+    if (type == AttributeValueString::TrafficSign) {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
+
+      TEType teType = teTypeToEnum(lineString);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+    }
+  }
+}
+
+void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+    if (type == "symbol") {
+      Id lsId = lineString.id();
+      BasicLineString3d lsBasic = lineString.basicLineString();
+
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
+
+      TEType teType = teTypeToEnum(lineString);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+
+      // Find the nearest intersecting lanelet
+      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);
+      if (laneletId) {
+        teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
+      }
+    }
+  }
+}
+
+void MapData::convertTEEdges() {
+  teToCenterlineEdges_.clear();
+  teToTEEdges_.clear();
+
+  for (const auto& edgeEntry : teEdges_) {
+    Id sourceId = edgeEntry.first;
+
+    // Find source TE instance
+    auto sourceIt = teInstances_.find(sourceId);
+    if (sourceIt == teInstances_.end()) {
+      continue;  // Skip if source TE not found
+    }
+    TEInstancePtr sourceTEPtr = sourceIt->second;
+
+    for (const auto& edge : edgeEntry.second) {
+      Id targetId = edge.el2_;
+
+      // Check if target is a TE instance (TE to TE edge)
+      auto targetTEIt = teInstances_.find(targetId);
+      if (targetTEIt != teInstances_.end()) {
+        teToTEEdges_.push_back({sourceTEPtr, targetTEIt->second});
+        continue;
+      }
+
+      // Otherwise, target should be a lanelet - find its compound centerline
+      CompoundLaneLineStringInstancePtr centerline = nullptr;
+      CompoundLaneLineStringInstanceList centerlines = compoundLineStringsOfType(LineStringType::Centerline);
+      for (const auto& cpdLineString : centerlines) {
+        // Check if this compound centerline contains the target lanelet
+        for (const auto& feature : cpdLineString->features()) {
+          for (const auto& laneletId : feature->laneletIDs()) {
+            if (laneletId == targetId) {
+              centerline = cpdLineString;
+              break;
+            }
+          }
+          if (centerline) break;
+        }
+        if (centerline) break;
+      }
+
+      if (centerline) {
+        teToCenterlineEdges_.push_back({sourceTEPtr, centerline});
+      }
+      // Skip if centerline not found
+    }
+  }
+}
+
 std::map<Id, size_t>::const_iterator findFirstOccElement(const CompoundElsList& elsList,
                                                          const std::map<Id, size_t>& searchMap) {
   for (const auto& el : elsList.ids) {
@@ -447,8 +681,8 @@ void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
 }
 
 void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
-                                     lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                     traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                    lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   std::vector<CompoundElsList> compoundedBordersAndDividers;
   std::map<Id, size_t> elInsertIdx;
 
@@ -505,12 +739,13 @@ void MapData::updateAssociatedCpdInstanceIndices() {
 }
 
 bool MapData::processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,
-                          double roll) {
+                         double roll) {
   bool validLineStrings = processInstances(laneLineStrings_, bbox, paramType, nPoints, pitch, roll);
   bool validLaneletInstances = processInstances(laneletInstances_, bbox, paramType, nPoints, pitch, roll);
   bool validCompoundLineStrings = processInstances(compoundLaneLineStrings_, bbox, paramType, nPoints, pitch, roll);
+  bool validTEInstances = processInstances(teInstances_, bbox, paramType, nPoints, pitch, roll);
 
-  if (validLineStrings && validLaneletInstances && validCompoundLineStrings) {
+  if (validLineStrings && validLaneletInstances && validCompoundLineStrings && validTEInstances) {
     return true;
   } else {
     return false;
@@ -536,15 +771,59 @@ MapData::TensorInstanceData MapData::getTensorInstanceData(bool pointsIn2d, bool
     }
 
     // Collect all valid compound linestrings organized by type
+    // Build mapping from instance pointer to (type, index)
+    std::map<CompoundLaneLineStringInstancePtr, std::pair<LineStringType, size_t>> cpdInstanceToIndex;
     for (size_t i = 0; i < compoundLaneLineStrings_.size(); ++i) {
       const auto& cpdFeat = compoundLaneLineStrings_[i];
       if (cpdFeat->valid()) {
         std::vector<MatrixXd> matrices = cpdFeat->pointMatrices(pointsIn2d);
         LineStringType type = cpdFeat->type();
+        size_t typeIndex = tfData_->compoundLineStringsByType_[type].size();
         for (const auto& mat : matrices) {
           tfData_->compoundLineStringsByType_[type].push_back(mat);
           tfData_->compoundLineStringInstancesByType_[type].push_back(cpdFeat);
         }
+        cpdInstanceToIndex[cpdFeat] = {type, typeIndex};
+      }
+    }
+
+    // Collect all valid traffic elements organized by type
+    // Build mapping from instance pointer to (type, index)
+    std::map<TEInstancePtr, std::pair<TEType, size_t>> teInstanceToIndex;
+    for (const auto& te_pair : teInstances_) {
+      if (te_pair.second->valid()) {
+        std::vector<MatrixXd> matrices = te_pair.second->pointMatrices(pointsIn2d);
+        TEType type = te_pair.second->teType();
+        size_t typeIndex = tfData_->teInstancesByType_[type].size();
+        for (const auto& mat : matrices) {
+          tfData_->teInstancesByType_[type].push_back(mat);
+        }
+        teInstanceToIndex[te_pair.second] = {type, typeIndex};
+      }
+    }
+
+    // Convert teToCenterlineEdges_ to index-based edges
+    for (const auto& edge : teToCenterlineEdges_) {
+      auto teIt = teInstanceToIndex.find(edge.first);
+      auto cpdIt = cpdInstanceToIndex.find(edge.second);
+      if (teIt != teInstanceToIndex.end() && cpdIt != cpdInstanceToIndex.end()) {
+        if (cpdIt->second.first != LineStringType::Centerline) {
+          std::cerr << "Warning: TE to centerline edge contains non-centerline compound linestring (type: "
+                    << static_cast<int>(cpdIt->second.first) << ")" << std::endl;
+        } else {
+          tfData_->teToCenterlineIndexEdges_.push_back(
+              std::make_tuple(teIt->second.first, teIt->second.second, cpdIt->second.second));
+        }
+      }
+    }
+
+    // Convert teToTEEdges_ to index-based edges
+    for (const auto& edge : teToTEEdges_) {
+      auto teSourceIt = teInstanceToIndex.find(edge.first);
+      auto teTargetIt = teInstanceToIndex.find(edge.second);
+      if (teSourceIt != teInstanceToIndex.end() && teTargetIt != teInstanceToIndex.end()) {
+        tfData_->teToTEIndexEdges_.push_back(std::make_tuple(teSourceIt->second.first, teSourceIt->second.second,
+                                                             teTargetIt->second.first, teTargetIt->second.second));
       }
     }
   }
@@ -567,8 +846,16 @@ std::vector<MatrixXd> MapData::TensorInstanceData::compoundLineStringsOfType(Lin
   return std::vector<MatrixXd>();
 }
 
+std::vector<MatrixXd> MapData::TensorInstanceData::teInstancesOfType(TEType type) const {
+  auto it = teInstancesByType_.find(type);
+  if (it != teInstancesByType_.end()) {
+    return it->second;
+  }
+  return std::vector<MatrixXd>();
+}
+
 CompoundLaneLineStringInstancePtr MapData::TensorInstanceData::pointMatrixCpdLineStrings(LineStringType type,
-                                                                                          size_t index) {
+                                                                                         size_t index) {
   auto typeIt = compoundLineStringInstancesByType_.find(type);
   if (typeIt == compoundLineStringInstancesByType_.end()) {
     throw std::out_of_range("No compound line strings exist for the given type!");
@@ -619,6 +906,18 @@ LaneLineStringInstances MapData::validLineStringsOfType(LineStringType type) con
 CompoundLaneLineStringInstanceList MapData::validCompoundLineStringsOfType(LineStringType type) const {
   return getValidElements(compoundLineStringsOfType(type));
 }
+
+TEInstances MapData::teInstancesOfType(TEType type) const {
+  TEInstances result;
+  for (const auto& pair : teInstances_) {
+    if (pair.second->teType() == type) {
+      result.insert(pair);
+    }
+  }
+  return result;
+}
+
+TEInstances MapData::validTEInstancesOfType(TEType type) const { return getValidElements(teInstancesOfType(type)); }
 
 }  // namespace ml_converter
 }  // namespace lanelet

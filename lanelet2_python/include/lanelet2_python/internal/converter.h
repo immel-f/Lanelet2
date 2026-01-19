@@ -226,6 +226,52 @@ struct PyPair {
   PythonToPairConverter<T1, T2> fromPy;
 };
 
+template <typename... Args>
+struct TupleToPythonConverter {
+  static PyObject* convert(const std::tuple<Args...>& tuple) {
+    return convertImpl(tuple, std::index_sequence_for<Args...>{});
+  }
+
+  template <std::size_t... Is>
+  static PyObject* convertImpl(const std::tuple<Args...>& tuple, std::index_sequence<Is...>) {
+    return py::incref(py::make_tuple(std::get<Is>(tuple)...).ptr());
+  }
+};
+
+template <typename... Args>
+struct PythonToTupleConverter {
+  PythonToTupleConverter() {
+    py::converter::registry::push_back(&convertible, &construct, py::type_id<std::tuple<Args...>>());
+  }
+  static void* convertible(PyObject* obj) {
+    if (!PyTuple_CheckExact(obj)) {
+      return nullptr;
+    }
+    if (PyTuple_Size(obj) != sizeof...(Args)) {
+      return nullptr;
+    }
+    return obj;
+  }
+  static void construct(PyObject* obj, py::converter::rvalue_from_python_stage1_data* data) {
+    py::tuple tuple(py::borrowed(obj));
+    using StorageType = py::converter::rvalue_from_python_storage<std::tuple<Args...>>;
+    void* storage = reinterpret_cast<StorageType*>(data)->storage.bytes;  // NOLINT
+    constructImpl(tuple, storage, std::index_sequence_for<Args...>{});
+    data->convertible = storage;
+  }
+
+  template <std::size_t... Is>
+  static void constructImpl(const py::tuple& tuple, void* storage, std::index_sequence<Is...>) {
+    new (storage) std::tuple<Args...>(py::extract<Args>(tuple[Is])()...);
+  }
+};
+
+template <typename... Args>
+struct PyTuple {
+  py::to_python_converter<std::tuple<Args...>, TupleToPythonConverter<Args...>> toPy;
+  PythonToTupleConverter<Args...> fromPy;
+};
+
 template <typename T>
 using VectorToListConverter = py::to_python_converter<T, VectorToList<T>>;
 
@@ -243,4 +289,7 @@ using VariantConverter = py::to_python_converter<T, VariantToObject<T>>;
 
 template <typename T>
 using PairConverter = PyPair<typename T::first_type, typename T::second_type>;
+
+template <typename TupleType>
+using TupleConverter = py::to_python_converter<TupleType, TupleToPythonConverter<>>;
 }  // namespace converters

@@ -1,7 +1,8 @@
+#include "lanelet2_ml_converter/MapInstances.h"
+
 #include <boost/geometry.hpp>
 #include <type_traits>
 
-#include "lanelet2_ml_converter/MapInstances.h"
 #include "lanelet2_ml_converter/Utils.h"
 
 namespace lanelet {
@@ -109,9 +110,19 @@ std::vector<MatrixXd> TEInstance::pointMatrices(bool pointsIn2d) const {
   return std::vector<MatrixXd>{toPointMatrix(rawInstance_, (pointsIn2d || processedFrom2d_))};
 }
 
-bool TEInstance::process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t /*unused*/,
-                         double pitch, double roll) {
-  throw std::runtime_error("Not implemented yet!");
+bool TEInstance::process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,
+                         double roll) {
+  LStringProcessResult result = processLineStringImpl(rawInstance_, bbox, paramType, nPoints, pitch, roll);
+  if (result.valid_) {
+    cutInstances_ = result.cutInstances;
+    cutAndResampledInstances_ = result.cutAndResampledInstances;
+    cutResampledAndTransformedInstances_ = result.cutResampledAndTransformedInstances;
+  } else {
+    valid_ = result.valid_;
+  }
+  wasCut_ = result.wasCut_;
+  processedFrom2d_ = bbox.from2d;
+  return result.valid_;
 }
 
 LaneletInstance::LaneletInstance(LaneLineStringInstancePtr leftBoundary, LaneLineStringInstancePtr rightBoundary,
