@@ -107,7 +107,11 @@ std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) con
 }
 
 std::vector<MatrixXd> TEInstance::pointMatrices(bool pointsIn2d) const {
-  return std::vector<MatrixXd>{toPointMatrix(rawInstance_, (pointsIn2d || processedFrom2d_))};
+  std::vector<MatrixXd> pointMatrices;
+  for (const auto& split : cutResampledAndTransformedInstances_) {
+    pointMatrices.push_back(toPointMatrix(split, (pointsIn2d || processedFrom2d_)));
+  }
+  return pointMatrices;
 }
 
 bool TEInstance::process(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,

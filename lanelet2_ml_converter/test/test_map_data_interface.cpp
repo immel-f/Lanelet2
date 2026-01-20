@@ -200,3 +200,107 @@ TEST_F(MLConverterTest, MapDataSaveLoad) {
   }
   EXPECT_EQ(backLaneDividersOrig.size(), backLaneDividersLoaded.size());
 }
+
+TEST_F(MLConverterTest, MapDataInterfaceTrafficElements) {  // NOLINT
+  traffic_rules::TrafficRulesPtr trafficRules{
+      traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)};
+  MapDataInterface::Configuration config{};
+  config.reprType = LaneletRepresentationType::Centerline;
+  config.paramType = ParametrizationType::LineString;
+  config.submapExtentLongitudinal = 10;
+  config.submapExtentLateral = 5;
+  config.nPoints = 20;
+
+  MapDataInterface parser(laneletMap, config);
+
+  // Position near traffic light and stop line (lanelet 2001 at x=6, y=-1)
+  BasicPoint2d pos(6, -1);
+  double yaw = 0;
+
+  parser.setCurrPosAndExtractSubmap2d(pos, yaw);
+  MapDataPtr mapData = parser.mapData(true);
+
+  EXPECT_TRUE(mapData != nullptr);
+
+  // Verify traffic elements are extracted in the submap
+  auto stopLines = mapData->teInstancesOfType(TEType::StopLine);
+  EXPECT_GT(stopLines.size(), 0);
+
+  auto trafficLights = mapData->teInstancesOfType(TEType::TLCar);
+  EXPECT_GT(trafficLights.size(), 0);
+
+  auto arrows = mapData->teInstancesOfType(TEType::ArrowGoStraight);
+  EXPECT_GT(arrows.size(), 0);
+
+  // Get TensorInstanceData
+  auto tfData = mapData->getTensorInstanceData(true, false);
+
+  // Verify TE matrices
+  std::vector<Eigen::MatrixXd> stopLineMatrices = tfData.teInstancesOfType(TEType::StopLine);
+  EXPECT_GT(stopLineMatrices.size(), 0);
+
+  std::vector<Eigen::MatrixXd> trafficLightMatrices = tfData.teInstancesOfType(TEType::TLCar);
+  EXPECT_GT(trafficLightMatrices.size(), 0);
+
+  // Verify edges are created
+  auto teToTEEdges = tfData.teToTEIndexEdges();
+  EXPECT_GT(teToTEEdges.size(), 0);
+
+  auto teToCenterlineEdges = tfData.teToCenterlineIndexEdges();
+  EXPECT_GT(teToCenterlineEdges.size(), 0);
+}
+
+TEST_F(MLConverterTest, MapDataInterfaceBatchTrafficElements) {  // NOLINT
+  traffic_rules::TrafficRulesPtr trafficRules{
+      traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)};
+  MapDataInterface::Configuration config{};
+  config.reprType = LaneletRepresentationType::Centerline;
+  config.paramType = ParametrizationType::LineString;
+  config.submapExtentLongitudinal = 8;
+  config.submapExtentLateral = 4;
+  config.nPoints = 20;
+
+  MapDataInterface parser(laneletMap, config);
+
+  // Test multiple positions: one near traffic light, one near symbol
+  std::vector<BasicPoint2d> pts{BasicPoint2d(6, -1), BasicPoint2d(7, -8)};
+  std::vector<double> yaws{0, M_PI / 2};
+
+  std::vector<MapDataPtr> mDataVec = parser.mapDataBatch2d(pts, yaws);
+
+  EXPECT_EQ(mDataVec.size(), 2);
+
+  // First position should have traffic light and stop line
+  auto tfData0 = mDataVec[0]->getTensorInstanceData(true, false);
+  auto stopLines0 = tfData0.teInstancesOfType(TEType::StopLine);
+  auto trafficLights0 = tfData0.teInstancesOfType(TEType::TLCar);
+
+  // At least one of these should be present depending on submap extraction
+  EXPECT_TRUE(stopLines0.size() > 0 || trafficLights0.size() > 0);
+
+  // Second position should have symbol
+  auto tfData1 = mDataVec[1]->getTensorInstanceData(true, false);
+  auto symbols30 = tfData1.teInstancesOfType(TEType::Symbol30);
+  EXPECT_GT(symbols30.size(), 0);
+
+  // Verify both have edge information
+  for (const auto& mData : mDataVec) {
+    auto tfData = mData->getTensorInstanceData(true, false);
+    // At least one type of edge should exist if TEs are present
+    auto teToCenterline = tfData.teToCenterlineIndexEdges();
+    auto teToTE = tfData.teToTEIndexEdges();
+
+    // If there are any traffic elements, there should be edges
+    bool hasAnyTE = false;
+    for (int teType = 0; teType < static_cast<int>(TEType::Unknown); ++teType) {
+      if (tfData.teInstancesOfType(static_cast<TEType>(teType)).size() > 0) {
+        hasAnyTE = true;
+        break;
+      }
+    }
+
+    if (hasAnyTE) {
+      EXPECT_TRUE(teToCenterline.size() > 0 || teToTE.size() > 0);
+    }
+  }
+}

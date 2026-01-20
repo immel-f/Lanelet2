@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <lanelet2_core/LaneletMap.h>
+#include <lanelet2_core/primitives/BasicRegulatoryElements.h>
 #include <lanelet2_core/primitives/Point.h>
 #include <lanelet2_traffic_rules/GermanTrafficRules.h>
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>
@@ -22,8 +23,10 @@ class MapTestData {
     initPoints();
     initLineStrings();
     initLanelets();
-    laneletMap = std::make_shared<LaneletMap>(lanelets, areas, std::unordered_map<Id, RegulatoryElementPtr>(),
-                                              std::unordered_map<Id, Polygon3d>(), lines, points);
+    initTrafficElements();
+    initRegulatoryElements();
+    laneletMap = std::make_shared<LaneletMap>(lanelets, areas, regulatoryElements, std::unordered_map<Id, Polygon3d>(),
+                                              lines, points);
   }
 
   void addPoint(double x, double y, double z) {
@@ -46,10 +49,12 @@ class MapTestData {
   Id pointId{0};
   Id lineId{1000};
   Id laneletId{2000};
+  Id regElemId{3000};
   std::unordered_map<Id, Lanelet> lanelets;
   std::unordered_map<Id, Point3d> points;
   std::unordered_map<Id, LineString3d> lines;
   std::unordered_map<Id, Area> areas;
+  std::unordered_map<Id, RegulatoryElementPtr> regulatoryElements;
   LaneletMapPtr laneletMap;
 
  private:
@@ -183,6 +188,51 @@ class MapTestData {
     addLaneletVehicle(lines.at(1015).invert(), lines.at(1016));  // ll2009
     addLaneletVehicle(lines.at(1017), lines.at(1010));           // ll2010
     addLaneletVehicle(lines.at(1018), lines.at(1009));           // ll2011
+  }
+  void initTrafficElements() {
+    // Stop line across lanelet 2003 at x=4
+    addLine(Points3d{points.at(12), points.at(22)});  // l1024
+    lines.at(1024).setAttribute(AttributeName::Type, "stop_line");
+
+    // Traffic light positioned above the stop line
+    addPoint(5.0, -3.5, 3.0);                         // p47 - bottom of traffic light
+    addPoint(5.0, -3.5, 4.0);                         // p48 - top of traffic light
+    addLine(Points3d{points.at(47), points.at(48)});  // l1025
+    lines.at(1025).setAttribute(AttributeName::Type, AttributeValueString::TrafficLight);
+    lines.at(1025).setAttribute(AttributeName::Subtype, "red_yellow_green");
+
+    // Straight arrow on lanelet 2000
+    addPoint(1.0, -1.0, 1.0);                         // p49
+    addPoint(3.0, -1.0, 1.0);                         // p50
+    addLine(Points3d{points.at(49), points.at(50)});  // l1026
+    lines.at(1026).setAttribute(AttributeName::Type, "arrow");
+    lines.at(1026).setAttribute(AttributeName::Subtype, "straight");
+
+    // Speed limit symbol (30) on lanelet 2008
+    addPoint(6.0, -9.0, 1.0);                         // p51
+    addPoint(6.0, -10.0, 1.0);                        // p52
+    addLine(Points3d{points.at(51), points.at(52)});  // l1027
+    lines.at(1027).setAttribute(AttributeName::Type, "symbol");
+    lines.at(1027).setAttribute(AttributeName::Subtype, "30");
+
+    // Straight Right arrow on lanelet 2003
+    addPoint(1.0, -3.0, 1.0);                         // p53
+    addPoint(3.0, -3.0, 1.0);                         // p54
+    addLine(Points3d{points.at(53), points.at(54)});  // l1028
+    lines.at(1028).setAttribute(AttributeName::Type, "arrow");
+    lines.at(1028).setAttribute(AttributeName::Subtype, "straight_right");
+  }
+  void initRegulatoryElements() {
+    // Create TrafficLight regulatory element connecting traffic light to stop line
+    // and associating with lanelet 2001
+    AttributeMap trafficLightAttrs;
+    trafficLightAttrs[AttributeName::Type] = "regulatory_element";
+    trafficLightAttrs[AttributeName::Subtype] = "traffic_light";
+    auto trafficLightRegElem = TrafficLight::make(regElemId++, trafficLightAttrs, {lines.at(1025)}, lines.at(1024));
+    regulatoryElements.insert({trafficLightRegElem->id(), trafficLightRegElem});
+
+    // Add regulatory element to the lanelet
+    lanelets.at(2003).addRegulatoryElement(trafficLightRegElem);
   }
 };
 

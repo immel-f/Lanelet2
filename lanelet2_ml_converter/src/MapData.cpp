@@ -446,10 +446,14 @@ void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMa
       TEType teType = teTypeToEnum(lineString);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
 
-      // Find the nearest lanelet within distance threshold
-      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap, false, 1.0);
-      if (laneletId) {
-        teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
+      // Find associated lanelets via regulatory elements
+      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
+      for (const auto& regElem : regElemsOwningLs) {
+        // Find lanelets that reference this regulatory element
+        auto laneletsOwningRegelem = localSubmap->laneletLayer.findUsages(regElem);
+        for (const auto& lanelet : laneletsOwningRegelem) {
+          teEdges_[lsId].push_back(Edge(lsId, lanelet.id(), false));
+        }
       }
     }
   }
@@ -584,27 +588,25 @@ void MapData::convertTEEdges() {
         continue;
       }
 
-      // Otherwise, target should be a lanelet - find its compound centerline
-      CompoundLaneLineStringInstancePtr centerline = nullptr;
+      // Otherwise, target should be a lanelet - find all compound centerlines containing it
       CompoundLaneLineStringInstanceList centerlines = compoundLineStringsOfType(LineStringType::Centerline);
       for (const auto& cpdLineString : centerlines) {
         // Check if this compound centerline contains the target lanelet
+        bool containsTargetLanelet = false;
         for (const auto& feature : cpdLineString->features()) {
           for (const auto& laneletId : feature->laneletIDs()) {
             if (laneletId == targetId) {
-              centerline = cpdLineString;
+              containsTargetLanelet = true;
               break;
             }
           }
-          if (centerline) break;
+          if (containsTargetLanelet) break;
         }
-        if (centerline) break;
+        
+        if (containsTargetLanelet) {
+          teToCenterlineEdges_.push_back({sourceTEPtr, cpdLineString});
+        }
       }
-
-      if (centerline) {
-        teToCenterlineEdges_.push_back({sourceTEPtr, centerline});
-      }
-      // Skip if centerline not found
     }
   }
 }
