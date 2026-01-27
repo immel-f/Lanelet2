@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+#include "lanelet2_core/Attribute.h"
 #include "lanelet2_core/geometry/LineString.h"
 #include "lanelet2_core/geometry/Polygon.h"
 #include "lanelet2_ml_converter/Utils.h"
@@ -12,14 +13,15 @@ namespace ml_converter {
 using namespace internal;
 
 MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                          traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation,
+                          traffic_rules::TrafficRulesPtr trafficRules,
+                          lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation,
                           const LineStringTypeGrouping& lineStringTypeGrouping) {
   MapDataPtr data = std::make_shared<MapData>();
   data->lineStringTypeGrouping_ = lineStringTypeGrouping;
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initLaneletInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
-  data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
+  data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, bikeSubmapGraph, ignoreMapElevation);
   data->updateAssociatedCpdInstanceIndices();
 
   // Collect non-lane traffic elements
@@ -39,10 +41,6 @@ void MapData::initLeftBoundaries(LaneletSubmapConstPtr& localSubmap,
                                  lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                  traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
-    if (!trafficRules->canPass(ll)) {
-      continue;
-    }
-
     Id boundID = ll.leftBound3d().id();
     BasicLineString3d bound =
         ll.leftBound3d().inverted() ? ll.leftBound3d().invert().basicLineString() : ll.leftBound3d().basicLineString();
@@ -72,10 +70,6 @@ void MapData::initRightBoundaries(LaneletSubmapConstPtr& localSubmap,
                                   lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                   traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
-    if (!trafficRules->canPass(ll)) {
-      continue;
-    }
-
     Id boundID = ll.rightBound3d().id();
     BasicLineString3d bound = ll.rightBound3d().inverted() ? ll.rightBound3d().invert().basicLineString()
                                                            : ll.rightBound3d().basicLineString();
@@ -103,10 +97,6 @@ void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
                                    lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
-    if (!trafficRules->canPass(ll)) {
-      continue;
-    }
-
     LaneLineStringInstancePtr leftBoundary = getLineStringFeatFromId(ll.leftBound().id(), ll.leftBound().inverted());
     LaneLineStringInstancePtr rightBoundary = getLineStringFeatFromId(ll.rightBound().id(), ll.leftBound().inverted());
     BasicLineString3d centerlineLString = ll.centerline3d().basicLineString();
@@ -115,9 +105,14 @@ void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
         pt[2] = 0;
       }
     }
-    LaneLineStringInstancePtr centerline =
-        std::make_shared<LaneLineStringInstance>(centerlineLString, ll.centerline3d().id(), LineStringType::Centerline,
-                                                 Ids{ll.id()}, ll.centerline3d().inverted());
+
+    // Determine if this is a bike lane based on subtype attribute
+    Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
+    LineStringType centerlineType =
+        (subtype == AttributeValueString::BicycleLane) ? LineStringType::BikeCenterline : LineStringType::Centerline;
+
+    LaneLineStringInstancePtr centerline = std::make_shared<LaneLineStringInstance>(
+        centerlineLString, ll.centerline3d().id(), centerlineType, Ids{ll.id()}, ll.centerline3d().inverted());
     laneletInstances_.insert(
         {ll.id(), std::make_shared<LaneletInstance>(leftBoundary, rightBoundary, centerline, ll.id())});
   }
@@ -138,7 +133,22 @@ void MapData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, 
                        ConstLanelet start, ConstLanelets initPath) {
   initPath.push_back(start);
   ConstLanelet current = start;
+
+  // Get the subtype of the starting lanelet to maintain consistency along the path
+  Attribute startSubtype = start.attributeOr(AttributeName::Subtype, "");
+
   ConstLanelets successorLLs = localSubmapGraph->following(current, false);
+
+  // Filter successors to only include those with matching subtype
+  ConstLanelets filteredSuccessors;
+  for (const auto& successor : successorLLs) {
+    Attribute successorSubtype = successor.attributeOr(AttributeName::Subtype, "");
+    if (successorSubtype == startSubtype) {
+      filteredSuccessors.push_back(successor);
+    }
+  }
+  successorLLs = filteredSuccessors;
+
   while (!successorLLs.empty()) {
     for (size_t i = 1; i != successorLLs.size(); i++) {
       if (isLaneletInPath(initPath, successorLLs[i])) {
@@ -154,6 +164,16 @@ void MapData::getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, 
     llEdges_[current.id()].push_back(Edge(current.id(), successorLLs.front().id(), false));
     current = successorLLs.front();
     successorLLs = localSubmapGraph->following(current, false);
+
+    // Filter successors again for the new current lanelet
+    filteredSuccessors.clear();
+    for (const auto& successor : successorLLs) {
+      Attribute successorSubtype = successor.attributeOr(AttributeName::Subtype, "");
+      if (successorSubtype == startSubtype) {
+        filteredSuccessors.push_back(successor);
+      }
+    }
+    successorLLs = filteredSuccessors;
   }
   paths.push_back(initPath);
 }
@@ -239,6 +259,12 @@ std::vector<CompoundElsList> MapData::computeCompoundRightBorders(const ConstLan
 CompoundLaneLineStringInstancePtr MapData::computeCompoundCenterline(const ConstLanelets& path,
                                                                      bool ignoreMapElevation) {
   LaneLineStringInstanceList compoundCenterlines;
+
+  // Determine centerline type from first lanelet in path
+  Attribute subtype = path.front().attributeOr(AttributeName::Subtype, "");
+  LineStringType centerlineType =
+      (subtype == AttributeValueString::BicycleLane) ? LineStringType::BikeCenterline : LineStringType::Centerline;
+
   for (const auto& ll : path) {
     BasicLineString3d centerlineLString = ll.centerline3d().basicLineString();
     if (ignoreMapElevation) {
@@ -246,10 +272,10 @@ CompoundLaneLineStringInstancePtr MapData::computeCompoundCenterline(const Const
         pt[2] = 0;
       }
     }
-    compoundCenterlines.push_back(std::make_shared<LaneLineStringInstance>(
-        centerlineLString, ll.id(), LineStringType::Centerline, Ids{ll.id()}, ll.centerline3d().inverted()));
+    compoundCenterlines.push_back(std::make_shared<LaneLineStringInstance>(centerlineLString, ll.id(), centerlineType,
+                                                                           Ids{ll.id()}, ll.centerline3d().inverted()));
   }
-  return std::make_shared<CompoundLaneLineStringInstance>(compoundCenterlines, LineStringType::Centerline);
+  return std::make_shared<CompoundLaneLineStringInstance>(compoundCenterlines, centerlineType);
 }
 
 void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
@@ -330,61 +356,110 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
       }
     }
 
-    // Order the component to form continuous chains
-    if (!component.empty()) {
-      std::set<size_t> usedIndices;
+    // Handle linestrings in component - build chains starting from nodes with dangling endpoints
+    std::set<size_t> usedIndices;
 
-      while (usedIndices.size() < component.size()) {
-        // Find the first unused linestring
-        size_t startIdx = 0;
-        while (startIdx < component.size() && usedIndices.count(startIdx)) {
-          startIdx++;
-        }
+    while (usedIndices.size() < component.size()) {
+      // Find the first unused linestring, preferring nodes with dangling endpoints
+      size_t startIdx = component.size();
+      bool startFirstEndpointDangling = false;
+      bool startSecondEndpointDangling = false;
 
-        if (startIdx >= component.size()) {
-          break;  // All linestrings have been used
-        }
+      // First, try to find an unused node where either endpoint is not connected to neighbors
+      for (size_t i = 0; i < component.size(); ++i) {
+        if (usedIndices.count(i)) continue;
 
-        // Start a new chain with this linestring
-        LaneLineStringInstanceList compoundFeatures;
-        usedIndices.insert(startIdx);
-        Id currentEndpoint = endpointIdMap[component[startIdx]].second;
-        compoundFeatures.push_back(getLineStringFeatFromId(component[startIdx], false));
+        Id nodeId = component[i];
+        const auto& nodeEndpoints = endpointIdMap[nodeId];
 
-        // Build the continuous chain
-        bool foundConnection = true;
-        while (foundConnection && usedIndices.size() < component.size()) {
-          foundConnection = false;
+        // Check if either endpoint is dangling (not matching any neighbor's endpoints)
+        bool firstEndpointDangling = true;
+        bool secondEndpointDangling = true;
 
-          for (size_t i = 0; i < component.size(); ++i) {
-            if (usedIndices.count(i)) continue;
+        for (const auto& neighborId : adjacency[nodeId]) {
+          const auto& neighborEndpoints = endpointIdMap[neighborId];
 
-            const auto& endpoints = endpointIdMap[component[i]];
-
-            // Check if this linestring connects to current endpoint
-            if (endpoints.first == currentEndpoint) {
-              // Connects normally, no inversion needed
-              compoundFeatures.push_back(getLineStringFeatFromId(component[i], false));
-              currentEndpoint = endpoints.second;
-              usedIndices.insert(i);
-              foundConnection = true;
-              break;
-            } else if (endpoints.second == currentEndpoint) {
-              // Connects with inversion - manually invert the linestring
-              compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[i], false)));
-              currentEndpoint = endpoints.first;
-              usedIndices.insert(i);
-              foundConnection = true;
-              break;
-            }
+          if (nodeEndpoints.first == neighborEndpoints.first || nodeEndpoints.first == neighborEndpoints.second) {
+            firstEndpointDangling = false;
+          }
+          if (nodeEndpoints.second == neighborEndpoints.first || nodeEndpoints.second == neighborEndpoints.second) {
+            secondEndpointDangling = false;
           }
         }
 
-        // Create a compound instance for this chain
-        if (!compoundFeatures.empty()) {
-          compoundLaneLineStrings_.push_back(
-              std::make_shared<CompoundLaneLineStringInstance>(compoundFeatures, LineStringType::DrivableArea));
+        if (firstEndpointDangling || secondEndpointDangling) {
+          startIdx = i;
+          startFirstEndpointDangling = firstEndpointDangling;
+          startSecondEndpointDangling = secondEndpointDangling;
+          break;
         }
+      }
+
+      // If no dangling endpoint found, use the first unused node
+      if (startIdx >= component.size()) {
+        for (size_t i = 0; i < component.size(); ++i) {
+          if (!usedIndices.count(i)) {
+            startIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (startIdx >= component.size()) {
+        break;  // All linestrings have been used
+      }
+
+      // Start a new chain with this linestring
+      LaneLineStringInstanceList compoundFeatures;
+      usedIndices.insert(startIdx);
+
+      // Determine which endpoint to start from based on dangling status
+      Id startNodeId = component[startIdx];
+      const auto& startEndpoints = endpointIdMap[startNodeId];
+      Id currentEndpoint = startEndpoints.second;  // Default to second endpoint
+
+      // If first endpoint is dangling, start from the second one; otherwise start from the first
+      if (startFirstEndpointDangling && !startSecondEndpointDangling) {
+        currentEndpoint = startEndpoints.second;
+        compoundFeatures.push_back(getLineStringFeatFromId(component[startIdx], false));
+      } else {
+        currentEndpoint = startEndpoints.first;
+        compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[startIdx], false)));
+      }
+
+      // Build the continuous chain
+      bool foundConnection = true;
+      while (foundConnection && usedIndices.size() < component.size()) {
+        foundConnection = false;
+
+        for (size_t i = 0; i < component.size(); ++i) {
+          if (usedIndices.count(i)) continue;
+
+          const auto& endpoints = endpointIdMap[component[i]];
+
+          // Check if this linestring connects to current endpoint
+          if (endpoints.first == currentEndpoint) {
+            // Connects normally, no inversion needed
+            compoundFeatures.push_back(getLineStringFeatFromId(component[i], false));
+            currentEndpoint = endpoints.second;
+            usedIndices.insert(i);
+            foundConnection = true;
+            break;
+          } else if (endpoints.second == currentEndpoint) {
+            // Connects with inversion - manually invert the linestring
+            compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[i], false)));
+            currentEndpoint = endpoints.first;
+            usedIndices.insert(i);
+            foundConnection = true;
+            break;
+          }
+        }
+      }
+
+      // Create a compound instance for this chain
+      if (!compoundFeatures.empty()) {
+        compoundLaneLineStrings_.push_back(
+            std::make_shared<CompoundLaneLineStringInstance>(compoundFeatures, LineStringType::DrivableArea));
       }
     }
   }
@@ -602,7 +677,7 @@ void MapData::convertTEEdges() {
           }
           if (containsTargetLanelet) break;
         }
-        
+
         if (containsTargetLanelet) {
           teToCenterlineEdges_.push_back({sourceTEPtr, cpdLineString});
         }
@@ -684,24 +759,48 @@ void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
 
 void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                                     lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
+                                    traffic_rules::TrafficRulesPtr trafficRules,
+                                    lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation) {
   std::vector<CompoundElsList> compoundedBordersAndDividers;
   std::map<Id, size_t> elInsertIdx;
 
-  std::vector<ConstLanelets> paths;
+  // Process vehicle routing graph
+  std::vector<ConstLanelets> vehiclePaths;
   for (const auto& ll : localSubmap->laneletLayer) {
     if (!trafficRules->canPass(ll)) {
       continue;
     }
 
     ConstLanelets previousLLs = localSubmapGraph->previous(ll, false);
-    ConstLanelets successorLLs = localSubmapGraph->following(ll, false);
     if (previousLLs.empty()) {
-      getPaths(localSubmapGraph, paths, ll);
+      getPaths(localSubmapGraph, vehiclePaths, ll);
     }
   }
 
-  for (const auto& path : paths) {
+  // Process bicycle routing graph if provided
+  std::vector<ConstLanelets> bikePaths;
+  if (bikeSubmapGraph) {
+    for (const auto& ll : localSubmap->laneletLayer) {
+      // Check if this is a bike lane
+      Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
+      if (subtype != AttributeValueString::BicycleLane) {
+        continue;
+      }
+
+      ConstLanelets previousLLs = bikeSubmapGraph->previous(ll, false);
+      if (previousLLs.empty()) {
+        getPaths(bikeSubmapGraph, bikePaths, ll);
+      }
+    }
+  }
+
+  // Combine all paths for border processing to avoid duplicating shared dividers
+  std::vector<ConstLanelets> allPaths;
+  allPaths.insert(allPaths.end(), vehiclePaths.begin(), vehiclePaths.end());
+  allPaths.insert(allPaths.end(), bikePaths.begin(), bikePaths.end());
+
+  // Process borders from all paths together
+  for (const auto& path : allPaths) {
     std::vector<CompoundElsList> compoundedLeft = computeCompoundLeftBorders(path);
     insertAndCheckNewCompoundInstances(compoundedBordersAndDividers, compoundedLeft, elInsertIdx);
     std::vector<CompoundElsList> compoundedRight = computeCompoundRightBorders(path);

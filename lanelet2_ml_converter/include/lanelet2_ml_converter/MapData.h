@@ -104,7 +104,9 @@ class MapData {
 
   MapData() noexcept : uuid_{boost::lexical_cast<std::string>(boost::uuids::random_generator()())} {}
   static MapDataPtr build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                          traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false,
+                          traffic_rules::TrafficRulesPtr trafficRules,
+                          lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph = nullptr,
+                          bool ignoreMapElevation = false,
                           const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
                   double roll = 0);
@@ -147,7 +149,9 @@ class MapData {
                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false);
   void initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                              lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
-                             traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation = false);
+                             traffic_rules::TrafficRulesPtr trafficRules,
+                             lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph,
+                             bool ignoreMapElevation = false);
   void updateAssociatedCpdInstanceIndices();
   void getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
                 ConstLanelet start, ConstLanelets initPath = ConstLanelets());

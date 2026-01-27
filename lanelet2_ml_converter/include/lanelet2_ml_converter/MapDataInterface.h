@@ -50,13 +50,15 @@ class MapDataInterface {
 
  private:
   MapDataPtr getMapData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch, double roll,
+                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                        lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, double pitch, double roll,
                         bool processAll);
 
   LaneletMapConstPtr laneletMap_;
   LaneletSubmapConstPtr localSubmap_;
   std::unordered_map<Id, int> teId2Index_;
   routing::RoutingGraphConstPtr localSubmapGraph_;
+  routing::RoutingGraphConstPtr bikeSubmapGraph_;
   Optional<BasicPoint3d> currPos_;  // in the map frame
   Optional<double> currRoll_;       // in the map frame, [rad]
   Optional<double> currPitch_;      // in the map frame, [rad]
@@ -64,6 +66,7 @@ class MapDataInterface {
   Optional<OrientedRect> currBbox_;
   Configuration config_;
   traffic_rules::TrafficRulesPtr trafficRules_;
+  traffic_rules::TrafficRulesPtr bikeTrafficRules_;
 };
 
 }  // namespace ml_converter

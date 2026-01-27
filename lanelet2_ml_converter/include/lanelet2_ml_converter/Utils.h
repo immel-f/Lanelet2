@@ -44,6 +44,8 @@ inline std::string lineStringTypeToString(LineStringType type) {
     return "Virtual";
   else if (type == LineStringType::Centerline)
     return "Centerline";
+  else if (type == LineStringType::BikeCenterline)
+    return "BikeCenterline";
   else if (type == LineStringType::Unknown)
     return "Unknown";
   else {

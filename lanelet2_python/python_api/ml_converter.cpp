@@ -213,6 +213,7 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("DashedSolid", LineStringType::DashedSolid)
       .value("Virtual", LineStringType::Virtual)
       .value("Centerline", LineStringType::Centerline)
+      .value("BikeCenterline", LineStringType::BikeCenterline)
       .value("Unknown", LineStringType::Unknown)
       .value("DrivableArea", LineStringType::DrivableArea)
       .value("Divider", LineStringType::Divider);
@@ -393,7 +394,9 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
         class_<MapData, MapDataPtr>("MapData", "Class for holding, accessing and processing of map data")
             .def(init<>())
             .def("build", &MapData::build,
-                 (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"), arg("ignoreMapElevation") = false,
+                 (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"),
+                  arg("bikeSubmapGraph") = routing::RoutingGraphConstPtr(),
+                  arg("ignoreMapElevation") = false,
                   arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping()))
             .staticmethod("build")
             .def("processAll", &MapData::processAll)

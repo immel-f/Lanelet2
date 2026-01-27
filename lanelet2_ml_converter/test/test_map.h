@@ -46,6 +46,13 @@ class MapTestData {
     laneletId++;
   }
 
+  void addLaneletBike(const LineString3d& left, const LineString3d& right) {
+    Lanelet ll{laneletId, left, right};
+    ll.setAttribute(AttributeName::Subtype, AttributeValueString::BicycleLane);
+    lanelets.insert(std::make_pair(laneletId, ll));
+    laneletId++;
+  }
+
   Id pointId{0};
   Id lineId{1000};
   Id laneletId{2000};
@@ -108,6 +115,24 @@ class MapTestData {
     addPoint(7.0, -3.0, 1.0);  // p44
     addPoint(7.0, -4.0, 1.0);  // p45
     addPoint(9.0, -0.5, 1.0);  // p46
+
+    // Bike lane points above lanelets 2000, 2001, 2002
+    addPoint(0.0, 1.0, 1.0);   // p47
+    addPoint(2.0, 1.0, 1.0);   // p48
+    addPoint(4.0, 1.0, 1.0);   // p49
+    addPoint(6.0, 1.0, 1.0);   // p50
+    addPoint(8.0, 1.0, 1.0);   // p51
+    addPoint(10.0, 1.0, 1.0);  // p52
+    addPoint(12.0, 1.0, 1.0);  // p53
+    addPoint(14.0, 1.0, 1.0);  // p54
+    addPoint(0.0, 2.0, 1.0);   // p55
+    addPoint(2.0, 2.0, 1.0);   // p56
+    addPoint(4.0, 2.0, 1.0);   // p57
+    addPoint(6.0, 2.0, 1.0);   // p58
+    addPoint(8.0, 2.0, 1.0);   // p59
+    addPoint(10.0, 2.0, 1.0);  // p60
+    addPoint(12.0, 2.0, 1.0);  // p61
+    addPoint(14.0, 2.0, 1.0);  // p62
   }
 
   void initLineStrings() {
@@ -173,6 +198,23 @@ class MapTestData {
     lines.at(1022).setAttribute("drivable_space_border", "true");
     addLine(Points3d{points.at(42), points.at(46)});  // l1023
     lines.at(1023).setAttribute("drivable_space_border", "true");
+
+    // Bike lane linestrings above lanelets 2000, 2001, 2002
+    addLine(Points3d{points.at(55), points.at(56), points.at(57)});  // l1024
+    lines.at(1024).setAttribute(AttributeName::Type, AttributeValueString::RoadBorder);
+    addLine(Points3d{points.at(57), points.at(58), points.at(59), points.at(60)});  // l1025
+    lines.at(1025).setAttribute(AttributeName::Type, AttributeValueString::RoadBorder);
+    addLine(Points3d{points.at(60), points.at(61), points.at(62)});  // l1026
+    lines.at(1026).setAttribute(AttributeName::Type, AttributeValueString::RoadBorder);
+    addLine(Points3d{points.at(47), points.at(48), points.at(49)});  // l1027
+    lines.at(1027).setAttribute(AttributeName::Type, AttributeValueString::LineThin);
+    lines.at(1027).setAttribute(AttributeName::Subtype, AttributeValueString::Dashed);
+    addLine(Points3d{points.at(49), points.at(50), points.at(51), points.at(52)});  // l1028
+    lines.at(1028).setAttribute(AttributeName::Type, AttributeValueString::LineThin);
+    lines.at(1028).setAttribute(AttributeName::Subtype, AttributeValueString::Solid);
+    addLine(Points3d{points.at(52), points.at(53), points.at(54)});  // l1029
+    lines.at(1029).setAttribute(AttributeName::Type, AttributeValueString::LineThin);
+    lines.at(1029).setAttribute(AttributeName::Subtype, AttributeValueString::Dashed);
   }
   void initLanelets() {
     lanelets.clear();
@@ -188,47 +230,53 @@ class MapTestData {
     addLaneletVehicle(lines.at(1015).invert(), lines.at(1016));  // ll2009
     addLaneletVehicle(lines.at(1017), lines.at(1010));           // ll2010
     addLaneletVehicle(lines.at(1018), lines.at(1009));           // ll2011
+    addLaneletBike(lines.at(1027), lines.at(1002));              // ll2012
+    addLaneletBike(lines.at(1028), lines.at(1001));              // ll2013
+    addLaneletBike(lines.at(1029), lines.at(1000));              // ll2014
+    addLaneletBike(lines.at(1029), lines.at(1026));              // ll2015
+    addLaneletBike(lines.at(1028), lines.at(1025));              // ll2016
+    addLaneletBike(lines.at(1027), lines.at(1024));              // ll2017
   }
   void initTrafficElements() {
     // Stop line across lanelet 2003 at x=4
-    addLine(Points3d{points.at(12), points.at(22)});  // l1024
-    lines.at(1024).setAttribute(AttributeName::Type, "stop_line");
+    addLine(Points3d{points.at(12), points.at(22)});  // l1030
+    lines.at(1030).setAttribute(AttributeName::Type, "stop_line");
 
     // Traffic light positioned above the stop line
-    addPoint(5.0, -3.5, 3.0);                         // p47 - bottom of traffic light
-    addPoint(5.0, -3.5, 4.0);                         // p48 - top of traffic light
-    addLine(Points3d{points.at(47), points.at(48)});  // l1025
-    lines.at(1025).setAttribute(AttributeName::Type, AttributeValueString::TrafficLight);
-    lines.at(1025).setAttribute(AttributeName::Subtype, "red_yellow_green");
+    addPoint(5.0, -3.5, 3.0);                         // p63 - bottom of traffic light
+    addPoint(5.0, -3.5, 4.0);                         // p64 - top of traffic light
+    addLine(Points3d{points.at(63), points.at(64)});  // l1031
+    lines.at(1031).setAttribute(AttributeName::Type, AttributeValueString::TrafficLight);
+    lines.at(1031).setAttribute(AttributeName::Subtype, "red_yellow_green");
 
     // Straight arrow on lanelet 2000
-    addPoint(1.0, -1.0, 1.0);                         // p49
-    addPoint(3.0, -1.0, 1.0);                         // p50
-    addLine(Points3d{points.at(49), points.at(50)});  // l1026
-    lines.at(1026).setAttribute(AttributeName::Type, "arrow");
-    lines.at(1026).setAttribute(AttributeName::Subtype, "straight");
+    addPoint(1.0, -1.0, 1.0);                         // p65
+    addPoint(3.0, -1.0, 1.0);                         // p66
+    addLine(Points3d{points.at(65), points.at(66)});  // l1032
+    lines.at(1032).setAttribute(AttributeName::Type, "arrow");
+    lines.at(1032).setAttribute(AttributeName::Subtype, "straight");
 
     // Speed limit symbol (30) on lanelet 2008
-    addPoint(6.0, -9.0, 1.0);                         // p51
-    addPoint(6.0, -10.0, 1.0);                        // p52
-    addLine(Points3d{points.at(51), points.at(52)});  // l1027
-    lines.at(1027).setAttribute(AttributeName::Type, "symbol");
-    lines.at(1027).setAttribute(AttributeName::Subtype, "30");
+    addPoint(6.0, -9.0, 1.0);                         // p67
+    addPoint(6.0, -10.0, 1.0);                        // p68
+    addLine(Points3d{points.at(67), points.at(68)});  // l1033
+    lines.at(1033).setAttribute(AttributeName::Type, "symbol");
+    lines.at(1033).setAttribute(AttributeName::Subtype, "30");
 
     // Straight Right arrow on lanelet 2003
-    addPoint(1.0, -3.0, 1.0);                         // p53
-    addPoint(3.0, -3.0, 1.0);                         // p54
-    addLine(Points3d{points.at(53), points.at(54)});  // l1028
-    lines.at(1028).setAttribute(AttributeName::Type, "arrow");
-    lines.at(1028).setAttribute(AttributeName::Subtype, "straight_right");
+    addPoint(1.0, -3.0, 1.0);                         // p69
+    addPoint(3.0, -3.0, 1.0);                         // p70
+    addLine(Points3d{points.at(69), points.at(70)});  // l1034
+    lines.at(1034).setAttribute(AttributeName::Type, "arrow");
+    lines.at(1034).setAttribute(AttributeName::Subtype, "straight_right");
   }
   void initRegulatoryElements() {
     // Create TrafficLight regulatory element connecting traffic light to stop line
-    // and associating with lanelet 2001
+    // and associating with lanelet 2003
     AttributeMap trafficLightAttrs;
     trafficLightAttrs[AttributeName::Type] = "regulatory_element";
     trafficLightAttrs[AttributeName::Subtype] = "traffic_light";
-    auto trafficLightRegElem = TrafficLight::make(regElemId++, trafficLightAttrs, {lines.at(1025)}, lines.at(1024));
+    auto trafficLightRegElem = TrafficLight::make(regElemId++, trafficLightAttrs, {lines.at(1031)}, lines.at(1030));
     regulatoryElements.insert({trafficLightRegElem->id(), trafficLightRegElem});
 
     // Add regulatory element to the lanelet

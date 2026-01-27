@@ -34,6 +34,7 @@ void MapDataInterface::setCurrPosAndExtractSubmap(const BasicPoint3d& pt, double
   localSubmap_ =
       extractSubmap(laneletMap_, currPos_->head(2), config_.submapExtentLongitudinal, config_.submapExtentLateral);
   localSubmapGraph_ = lanelet::routing::RoutingGraph::build(*localSubmap_, *trafficRules_);
+  bikeSubmapGraph_ = lanelet::routing::RoutingGraph::build(*localSubmap_, *bikeTrafficRules_);
   currBbox_ =
       getRotatedRect(*currPos_, config_.submapExtentLongitudinal, config_.submapExtentLateral, *currYaw_, false);
 }
@@ -41,18 +42,21 @@ void MapDataInterface::setCurrPosAndExtractSubmap(const BasicPoint3d& pt, double
 MapDataInterface::MapDataInterface(LaneletMapConstPtr laneletMap)
     : laneletMap_{laneletMap},
       config_{},
-      trafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)} {}
+      trafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)},
+      bikeTrafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Bicycle)} {}
 
 MapDataInterface::MapDataInterface(LaneletMapConstPtr laneletMap, Configuration config)
     : laneletMap_{laneletMap},
       config_{config},
-      trafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)} {}
+      trafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)},
+      bikeTrafficRules_{traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Bicycle)} {}
 
 MapDataPtr MapDataInterface::getMapData(LaneletSubmapConstPtr localSubmap, const OrientedRect& bbox,
-                                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph, double pitch,
+                                        lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
+                                        lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, double pitch,
                                         double roll, bool processAll) {
-  MapDataPtr mapData = MapData::build(localSubmap, localSubmapGraph, trafficRules_, config_.ignoreMapElevation,
-                                      config_.lineStringTypeGrouping);
+  MapDataPtr mapData = MapData::build(localSubmap, localSubmapGraph, trafficRules_, bikeSubmapGraph,
+                                      config_.ignoreMapElevation, config_.lineStringTypeGrouping);
   if (processAll) {
     mapData->processAll(bbox, config_.paramType, config_.nPoints, pitch, roll);
   }
@@ -69,9 +73,11 @@ std::vector<MapDataPtr> MapDataInterface::mapDataBatch2d(std::vector<BasicPoint2
         extractSubmap(laneletMap_, pts[i], config_.submapExtentLongitudinal, config_.submapExtentLateral);
     routing::RoutingGraphConstPtr localSubmapGraph =
         lanelet::routing::RoutingGraph::build(*localSubmap, *trafficRules_);
+    routing::RoutingGraphConstPtr bikeSubmapGraph =
+        lanelet::routing::RoutingGraph::build(*localSubmap, *bikeTrafficRules_);
     OrientedRect bbox = getRotatedRect(BasicPoint3d{pts[i].x(), pts[i].y(), 0}, config_.submapExtentLongitudinal,
                                        config_.submapExtentLateral, yaws[i], true);
-    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, 0, 0, true));
+    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, bikeSubmapGraph, 0, 0, true));
   }
   return mDataVec;
 }
@@ -91,9 +97,11 @@ std::vector<MapDataPtr> MapDataInterface::mapDataBatch(std::vector<BasicPoint3d>
         extractSubmap(laneletMap_, pts[i].head(2), config_.submapExtentLongitudinal, config_.submapExtentLateral);
     routing::RoutingGraphConstPtr localSubmapGraph =
         lanelet::routing::RoutingGraph::build(*localSubmap, *trafficRules_);
+    routing::RoutingGraphConstPtr bikeSubmapGraph =
+        lanelet::routing::RoutingGraph::build(*localSubmap, *bikeTrafficRules_);
     OrientedRect bbox =
         getRotatedRect(pts[i], config_.submapExtentLongitudinal, config_.submapExtentLateral, yaws[i], false);
-    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, pitches[i], rolls[i], true));
+    mDataVec.push_back(getMapData(localSubmap, bbox, localSubmapGraph, bikeSubmapGraph, pitches[i], rolls[i], true));
   }
   return mDataVec;
 }
@@ -115,7 +123,7 @@ MapDataPtr MapDataInterface::mapData(bool processAll) {
     throw InvalidObjectStateError(
         "Your current roll angle is not set! Call setCurrPosAndExtractSubmap() before trying to get the data!");
   }
-  return getMapData(localSubmap_, *currBbox_, localSubmapGraph_, *currPitch_, *currRoll_, processAll);
+  return getMapData(localSubmap_, *currBbox_, localSubmapGraph_, bikeSubmapGraph_, *currPitch_, *currRoll_, processAll);
 }
 
 }  // namespace ml_converter

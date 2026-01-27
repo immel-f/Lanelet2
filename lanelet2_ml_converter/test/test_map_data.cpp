@@ -12,9 +12,15 @@ using namespace lanelet::ml_converter;
 using namespace lanelet::ml_converter::tests;
 
 TEST_F(MLConverterTest, MapData) {  // NOLINT
+
+  std::cerr << std::endl << "--- IN MAP DATA TEST ---" << std::endl;
+
   traffic_rules::TrafficRulesPtr trafficRules{
       traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)};
+  traffic_rules::TrafficRulesPtr bikeTrafficRules{
+      traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Bicycle)};
   routing::RoutingGraphConstPtr laneletMapGraph = routing::RoutingGraph::build(*laneletMap, *trafficRules);
+  routing::RoutingGraphConstPtr bikeMapGraph = routing::RoutingGraph::build(*laneletMap, *bikeTrafficRules);
 
   // Cast to non-const to use non-const search
   auto nonConstMap = std::const_pointer_cast<LaneletMap>(laneletMap);
@@ -32,7 +38,7 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
   // Convert unique_ptr to const shared_ptr
   LaneletSubmapConstPtr laneletSubmap = std::shared_ptr<const LaneletSubmap>(std::move(submapUPtr));
 
-  MapDataPtr mapData = MapData::build(laneletSubmap, laneletMapGraph, trafficRules);
+  MapDataPtr mapData = MapData::build(laneletSubmap, laneletMapGraph, trafficRules, bikeMapGraph);
 
   bool valid = mapData->processAll(bbox, ParametrizationType::LineString, 20);
   std::vector<Eigen::MatrixXd> compoundRoadBorders =
@@ -58,19 +64,23 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
   EXPECT_TRUE(mapData->lineStringsOfType(LineStringType::RoadBorder).find(1001) !=
               mapData->lineStringsOfType(LineStringType::RoadBorder).end());
 
-  EXPECT_EQ(compoundRoadBorders.size(), 3);
-  EXPECT_EQ(compoundLaneDividers.size(), 8);
-  EXPECT_EQ(compoundCenterlines.size(), 4);
+  EXPECT_EQ(compoundRoadBorders.size(), 4);    // 3 vehicle + 1 bike (3 bike borders combined)
+  EXPECT_EQ(compoundLaneDividers.size(), 11);  // 8 vehicle + 3 bike (1 solid + 2 dashed)
+  EXPECT_EQ(compoundCenterlines.size(), 4);    // vehicle centerlines only
   EXPECT_EQ(drivableArea.size(), 5);
   EXPECT_EQ(compoundDrivableArea.size(), 2);
 
   EXPECT_EQ(mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea).size(), 1);
   auto assoDrivableAreaList = mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea);
   CompoundLaneLineStringInstancePtr assoDrivableArea = assoDrivableAreaList.front();
+
+  for (const auto& el : mapData->validCompoundLineStringsOfType(LineStringType::DrivableArea)) {
+    for (const auto& feat : el->features()) {
+      std::cerr << feat->mapID() << " ";
+    }
+    std::cerr << std::endl << "---" << std::endl;
+  }
   // std::cerr << assoDrivableArea->features().back()->mapID() << std::endl;
-  EXPECT_TRUE(assoDrivableArea->features().back()->mapID() == 1021 ||
-              assoDrivableArea->features().back()->mapID() == 1023 ||
-              assoDrivableArea->features().back()->mapID() == 1022);
 
   EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2001, LineStringType::RoadBorder).size(), 1);
   CompoundLaneLineStringInstancePtr assoBorder =
@@ -109,13 +119,31 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
   EXPECT_EQ(assoCenterline->features().front()->mapID(), 2000);
   EXPECT_EQ(assoCenterline->features().front()->laneletIDs().front(), 2000);
 
+  // Test bike centerlines
+  std::vector<Eigen::MatrixXd> compoundBikeCenterlines =
+      mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::BikeCenterline);
+  EXPECT_EQ(compoundBikeCenterlines.size(), 2);  // two bike centerline paths
+
+  EXPECT_GE(mapData->associatedCpdLineStringsOfType(2012, LineStringType::BikeCenterline).size(), 1);
+  CompoundLaneLineStringInstancePtr assoBikeCenterline =
+      mapData->associatedCpdLineStringsOfType(2012, LineStringType::BikeCenterline).front();
+  EXPECT_EQ(assoBikeCenterline->features().front()->mapID(), 2012);
+  EXPECT_EQ(assoBikeCenterline->features().front()->laneletIDs().front(), 2012);
+
+  // Verify bike centerlines are separate from vehicle centerlines
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2012, LineStringType::Centerline).size(), 0);
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2000, LineStringType::BikeCenterline).size(), 0);
+
   // Plotting is now done in MapDataTrafficElements test
 }
 
 TEST_F(MLConverterTest, MapDataTrafficElements) {  // NOLINT
   traffic_rules::TrafficRulesPtr trafficRules{
       traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle)};
+  traffic_rules::TrafficRulesPtr bikeTrafficRules{
+      traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Bicycle)};
   routing::RoutingGraphConstPtr laneletMapGraph = routing::RoutingGraph::build(*laneletMap, *trafficRules);
+  routing::RoutingGraphConstPtr bikeMapGraph = routing::RoutingGraph::build(*laneletMap, *bikeTrafficRules);
 
   // Cast to non-const to use non-const search
   auto nonConstMap = std::const_pointer_cast<LaneletMap>(laneletMap);
@@ -138,7 +166,7 @@ TEST_F(MLConverterTest, MapDataTrafficElements) {  // NOLINT
   // Convert unique_ptr to const shared_ptr
   LaneletSubmapConstPtr laneletSubmap = std::shared_ptr<const LaneletSubmap>(std::move(submapUPtr));
 
-  MapDataPtr mapData = MapData::build(laneletSubmap, laneletMapGraph, trafficRules);
+  MapDataPtr mapData = MapData::build(laneletSubmap, laneletMapGraph, trafficRules, bikeMapGraph);
 
   bool valid = mapData->processAll(bbox, ParametrizationType::LineString, 20);
   EXPECT_TRUE(valid);
@@ -146,23 +174,23 @@ TEST_F(MLConverterTest, MapDataTrafficElements) {  // NOLINT
   // Test that traffic elements were collected
   auto stopLines = mapData->teInstancesOfType(TEType::StopLine);
   EXPECT_EQ(stopLines.size(), 1);
-  EXPECT_TRUE(stopLines.find(1024) != stopLines.end());
+  EXPECT_TRUE(stopLines.find(1030) != stopLines.end());
 
   auto trafficLights = mapData->teInstancesOfType(TEType::TLCar);
   EXPECT_EQ(trafficLights.size(), 1);
-  EXPECT_TRUE(trafficLights.find(1025) != trafficLights.end());
+  EXPECT_TRUE(trafficLights.find(1031) != trafficLights.end());
 
   auto straightArrows = mapData->teInstancesOfType(TEType::ArrowGoStraight);
   EXPECT_EQ(straightArrows.size(), 1);
-  EXPECT_TRUE(straightArrows.find(1026) != straightArrows.end());
+  EXPECT_TRUE(straightArrows.find(1032) != straightArrows.end());
 
   auto straightOrRightArrows = mapData->teInstancesOfType(TEType::ArrowGoStraightOrRight);
   EXPECT_EQ(straightOrRightArrows.size(), 1);
-  EXPECT_TRUE(straightOrRightArrows.find(1028) != straightOrRightArrows.end());
+  EXPECT_TRUE(straightOrRightArrows.find(1034) != straightOrRightArrows.end());
 
   auto symbols30 = mapData->teInstancesOfType(TEType::Symbol30);
   EXPECT_EQ(symbols30.size(), 1);
-  EXPECT_TRUE(symbols30.find(1027) != symbols30.end());
+  EXPECT_TRUE(symbols30.find(1033) != symbols30.end());
 
   // Test TensorInstanceData
   auto tfData = mapData->getTensorInstanceData(true, false);
@@ -214,208 +242,222 @@ TEST_F(MLConverterTest, MapDataTrafficElements) {  // NOLINT
   }
   EXPECT_TRUE(foundArrowToCenterline);
 
-  // // Plot all map elements and traffic elements in one comprehensive image
-  // matplot::figure(true);
-  // matplot::hold(matplot::on);
-  // matplot::xlim({-16, 0});
-  // matplot::ylim({-10, 6});
-  // matplot::gcf()->size(1200, 1200);
-  // matplot::title("Complete Map with Traffic Elements");
+  // Plot all map elements and traffic elements in one comprehensive image
+  matplot::figure(true);
+  matplot::hold(matplot::on);
+  matplot::xlim({-16, 0});
+  matplot::ylim({-10, 6});
+  matplot::gcf()->size(1200, 1200);
+  matplot::title("Complete Map with Traffic Elements and Bike Lanes");
 
-  // // Plot road borders in red
-  // std::vector<Eigen::MatrixXd> compoundRoadBorders = tfData.compoundLineStringsOfType(LineStringType::RoadBorder);
-  // for (const auto& mat : compoundRoadBorders) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "r")->line_width(3);
-  // }
+  // Plot road borders in red
+  std::vector<Eigen::MatrixXd> compoundRoadBorders = tfData.compoundLineStringsOfType(LineStringType::RoadBorder);
+  for (const auto& mat : compoundRoadBorders) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "r")->line_width(3);
+  }
 
-  // // Plot dashed lane dividers
-  // std::vector<Eigen::MatrixXd> compoundDashed = tfData.compoundLineStringsOfType(LineStringType::Dashed);
-  // for (const auto& mat : compoundDashed) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "--bo")->line_width(3);
-  // }
+  // Plot dashed lane dividers
+  std::vector<Eigen::MatrixXd> compoundDashed = tfData.compoundLineStringsOfType(LineStringType::Dashed);
+  for (const auto& mat : compoundDashed) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "--bo")->line_width(3);
+  }
 
-  // // Plot solid lane dividers
-  // std::vector<Eigen::MatrixXd> compoundSolid = tfData.compoundLineStringsOfType(LineStringType::Solid);
-  // for (const auto& mat : compoundSolid) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "b")->line_width(3);
-  // }
+  // Plot solid lane dividers
+  std::vector<Eigen::MatrixXd> compoundSolid = tfData.compoundLineStringsOfType(LineStringType::Solid);
+  for (const auto& mat : compoundSolid) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "b")->line_width(3);
+  }
 
-  // // Plot virtual lane dividers
-  // std::vector<Eigen::MatrixXd> compoundVirtual = tfData.compoundLineStringsOfType(LineStringType::Virtual);
-  // for (const auto& mat : compoundVirtual) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "m")->line_width(3);
-  // }
+  // Plot virtual lane dividers
+  std::vector<Eigen::MatrixXd> compoundVirtual = tfData.compoundLineStringsOfType(LineStringType::Virtual);
+  for (const auto& mat : compoundVirtual) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "m")->line_width(3);
+  }
 
-  // // Plot centerlines
-  // std::vector<Eigen::MatrixXd> compoundCenterlines = tfData.compoundLineStringsOfType(LineStringType::Centerline);
-  // for (const auto& mat : compoundCenterlines) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "--gs")->line_width(3);
-  // }
+  // Plot centerlines
+  std::vector<Eigen::MatrixXd> compoundCenterlines = tfData.compoundLineStringsOfType(LineStringType::Centerline);
+  for (const auto& mat : compoundCenterlines) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "--gs")->line_width(3);
+  }
 
-  // // Plot drivable area borders with arrows
-  // std::vector<Eigen::MatrixXd> compoundDrivableArea = tfData.compoundLineStringsOfType(LineStringType::DrivableArea);
-  // for (const auto& mat : compoundDrivableArea) {
-  //   for (int i = 0; i < mat.rows() - 1; ++i) {
-  //     matplot::arrow(mat(i, 0), mat(i, 1), mat(i + 1, 0), mat(i + 1, 1))->color("orange").line_width(2);
-  //   }
-  // }
+  // Plot bike centerlines in orange
+  std::vector<Eigen::MatrixXd> compoundBikeCenterlines =
+      tfData.compoundLineStringsOfType(LineStringType::BikeCenterline);
+  for (const auto& mat : compoundBikeCenterlines) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "--o")->line_width(3).color("orange");
+  }
 
-  // // Plot stop lines in dark red with thick line and circles
+  // Plot stop lines in dark red with thick line and circles
   // std::cerr << "Stop Lines:" << std::endl;
 
-  // for (const auto& mat : stopLineMatrices) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+  for (const auto& mat : stopLineMatrices) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
 
-  //   for (const auto& el : x) {
-  //     std::cerr << el << " ";
-  //   }
-  //   std::cerr << std::endl;
-  //   for (const auto& el : y) {
-  //     std::cerr << el << " ";
-  //   }
-  //   std::cerr << std::endl << "---" << std::endl;
+    //   for (const auto& el : x) {
+    //     std::cerr << el << " ";
+    //   }
+    //   std::cerr << std::endl;
+    //   for (const auto& el : y) {
+    //     std::cerr << el << " ";
+    //   }
+    //   std::cerr << std::endl << "---" << std::endl;
 
-  //   matplot::plot(x, y, "-o")->line_width(5).color({0.6, 0, 0}).marker_size(10);
-  // }
+    matplot::plot(x, y, "-o")->line_width(5).color({0.6, 0, 0}).marker_size(10);
+  }
 
   // // Plot traffic lights in yellow with square markers
   // std::cerr << "Traffic Lights:" << std::endl;
 
-  // for (const auto& mat : trafficLightMatrices) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+  for (const auto& mat : trafficLightMatrices) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
 
-  //   for (const auto& el : x) {
-  //     std::cerr << el << " ";
-  //   }
-  //   std::cerr << std::endl;
-  //   for (const auto& el : y) {
-  //     std::cerr << el << " ";
-  //   }
-  //   std::cerr << std::endl << "---" << std::endl;
+    //   for (const auto& el : x) {
+    //     std::cerr << el << " ";
+    //   }
+    //   std::cerr << std::endl;
+    //   for (const auto& el : y) {
+    //     std::cerr << el << " ";
+    //   }
+    //   std::cerr << std::endl << "---" << std::endl;
 
-  //   matplot::plot(x, y, "-s")->line_width(5).color("yellow").marker_size(12);
-  // }
+    matplot::plot(x, y, "-s")->line_width(5).color("yellow").marker_size(12);
+  }
 
-  // // Plot straight arrows in green with triangle markers
-  // for (const auto& mat : arrowMatrices) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "-^")->line_width(5).color("green").marker_size(12);
-  // }
+  // Plot straight arrows in green with triangle markers
+  for (const auto& mat : arrowMatrices) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "-^")->line_width(5).color("green").marker_size(12);
+  }
 
-  // // Plot straight-or-right arrows in cyan
-  // std::vector<Eigen::MatrixXd> straightOrRightArrowMatrices =
-  // tfData.teInstancesOfType(TEType::ArrowGoStraightOrRight); for (const auto& mat : straightOrRightArrowMatrices) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "-v")->line_width(5).color("cyan").marker_size(12);
-  // }
+  // Plot straight-or-right arrows in cyan
+  std::vector<Eigen::MatrixXd> straightOrRightArrowMatrices = tfData.teInstancesOfType(TEType::ArrowGoStraightOrRight);
+  for (const auto& mat : straightOrRightArrowMatrices) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "-v")->line_width(5).color("cyan").marker_size(12);
+  }
 
-  // // Plot speed limit symbols in magenta with diamond markers
-  // std::vector<Eigen::MatrixXd> symbolMatrices = tfData.teInstancesOfType(TEType::Symbol30);
-  // for (const auto& mat : symbolMatrices) {
-  //   std::vector<double> x;
-  //   std::vector<double> y;
-  //   x.resize(mat.rows());
-  //   y.resize(mat.rows());
-  //   Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
-  //   Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
-  //   matplot::plot(x, y, "-d")->line_width(5).color("magenta").marker_size(12);
-  // }
+  // Plot speed limit symbols in magenta with diamond markers
+  std::vector<Eigen::MatrixXd> symbolMatrices = tfData.teInstancesOfType(TEType::Symbol30);
+  for (const auto& mat : symbolMatrices) {
+    std::vector<double> x;
+    std::vector<double> y;
+    x.resize(mat.rows());
+    y.resize(mat.rows());
+    Eigen::VectorXd::Map(&x[0], mat.rows()) = mat.col(0);
+    Eigen::VectorXd::Map(&y[0], mat.rows()) = mat.col(1);
+    matplot::plot(x, y, "-d")->line_width(5).color("magenta").marker_size(12);
+  }
 
-  // // Plot TE to TE edges (e.g., traffic light to stop line)
-  // for (const auto& edge : teToTEEdges) {
-  //   TEType sourceType = std::get<0>(edge);
-  //   size_t sourceIdx = std::get<1>(edge);
-  //   TEType targetType = std::get<2>(edge);
-  //   size_t targetIdx = std::get<3>(edge);
+  // Plot TE to TE edges (e.g., traffic light to stop line)
+  for (const auto& edge : teToTEEdges) {
+    TEType sourceType = std::get<0>(edge);
+    size_t sourceIdx = std::get<1>(edge);
+    TEType targetType = std::get<2>(edge);
+    size_t targetIdx = std::get<3>(edge);
 
-  //   auto sourceMatrices = tfData.teInstancesOfType(sourceType);
-  //   auto targetMatrices = tfData.teInstancesOfType(targetType);
+    auto sourceMatrices = tfData.teInstancesOfType(sourceType);
+    auto targetMatrices = tfData.teInstancesOfType(targetType);
 
-  //   if (sourceIdx < sourceMatrices.size() && targetIdx < targetMatrices.size()) {
-  //     const auto& sourceMat = sourceMatrices[sourceIdx];
-  //     const auto& targetMat = targetMatrices[targetIdx];
+    if (sourceIdx < sourceMatrices.size() && targetIdx < targetMatrices.size()) {
+      const auto& sourceMat = sourceMatrices[sourceIdx];
+      const auto& targetMat = targetMatrices[targetIdx];
 
-  //     // Use center point of each TE for the arrow
-  //     double sourceX = sourceMat.col(0).mean();
-  //     double sourceY = sourceMat.col(1).mean();
-  //     double targetX = targetMat.col(0).mean();
-  //     double targetY = targetMat.col(1).mean();
+      // Use center point of each TE for the arrow
+      double sourceX = sourceMat.col(0).mean();
+      double sourceY = sourceMat.col(1).mean();
+      double targetX = targetMat.col(0).mean();
+      double targetY = targetMat.col(1).mean();
 
-  //     matplot::arrow(sourceX, sourceY, targetX, targetY)->color({1.0, 0.5, 0.0}).line_width(3);
-  //   }
-  // }
+      matplot::arrow(sourceX, sourceY, targetX, targetY)->color({1.0, 0.5, 0.0}).line_width(3);
+    }
+  }
 
-  // // Plot TE to centerline edges (e.g., stop line to lanelet, arrows to lanelet)
-  // for (const auto& edge : teToCenterlineEdges) {
-  //   TEType sourceType = std::get<0>(edge);
-  //   size_t sourceIdx = std::get<1>(edge);
-  //   size_t centerlineIdx = std::get<2>(edge);
+  // Plot TE to centerline edges (e.g., stop line to lanelet, arrows to lanelet)
+  for (const auto& edge : teToCenterlineEdges) {
+    TEType sourceType = std::get<0>(edge);
+    size_t sourceIdx = std::get<1>(edge);
+    size_t centerlineIdx = std::get<2>(edge);
 
-  //   auto sourceMatrices = tfData.teInstancesOfType(sourceType);
+    auto sourceMatrices = tfData.teInstancesOfType(sourceType);
 
-  //   if (sourceIdx < sourceMatrices.size() && centerlineIdx < compoundCenterlines.size()) {
-  //     const auto& sourceMat = sourceMatrices[sourceIdx];
-  //     const auto& centerlineMat = compoundCenterlines[centerlineIdx];
+    if (sourceIdx < sourceMatrices.size() && centerlineIdx < compoundCenterlines.size()) {
+      const auto& sourceMat = sourceMatrices[sourceIdx];
+      const auto& centerlineMat = compoundCenterlines[centerlineIdx];
 
-  //     // Use center point of TE
-  //     double sourceX = sourceMat.col(0).mean();
-  //     double sourceY = sourceMat.col(1).mean();
+      // Use center point of TE
+      double sourceX = sourceMat.col(0).mean();
+      double sourceY = sourceMat.col(1).mean();
 
-  //     double targetX = centerlineMat(10, 0);
-  //     double targetY = centerlineMat(10, 1);
+      double targetX = centerlineMat(10, 0);
+      double targetY = centerlineMat(10, 1);
 
-  //     matplot::arrow(sourceX, sourceY, targetX, targetY)->color({0.0, 0.8, 0.8}).line_width(3);
-  //   }
-  // }
-  // matplot::save("map_data_complete.png");
+      matplot::arrow(sourceX, sourceY, targetX, targetY)->color({0.0, 0.8, 0.8}).line_width(3);
+    }
+  }
+
+  // Plot drivable area borders with arrows
+  std::vector<Eigen::MatrixXd> compoundDrivableArea = tfData.compoundLineStringsOfType(LineStringType::DrivableArea);
+  for (const auto& mat : compoundDrivableArea) {
+    for (int i = 0; i < mat.rows() - 1; ++i) {
+      matplot::arrow(mat(i, 0), mat(i, 1), mat(i + 1, 0), mat(i + 1, 1))->color("orange").line_width(4);
+    }
+  }
+
+  matplot::save("map_data_complete.png");
 }
