@@ -16,7 +16,8 @@ namespace ml_converter {
 class MapDataInterface {
  public:
   struct Configuration {
-    Configuration() noexcept : lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
+    Configuration() noexcept : lineStringTypeGrouping{getDefaultLineStringTypeGrouping()},
+                               teTypeGrouping{getDefaultTETypeGrouping()} {}
     Configuration(LaneletRepresentationType reprType, ParametrizationType paramType, double submapExtentLongitudinal,
                   double submapExtentLateral, int nPointsLanes, int nPointsTE) noexcept
         : reprType{reprType},
@@ -25,7 +26,8 @@ class MapDataInterface {
           submapExtentLateral{submapExtentLateral},
           nPointsLanes{nPointsLanes},
           nPointsTE{nPointsTE},
-          lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
+          lineStringTypeGrouping{getDefaultLineStringTypeGrouping()},
+          teTypeGrouping{getDefaultTETypeGrouping()} {}
     LaneletRepresentationType reprType{LaneletRepresentationType::Boundaries};
     ParametrizationType paramType{ParametrizationType::LineString};
     double submapExtentLongitudinal{30};  // in driving direction
@@ -38,6 +40,7 @@ class MapDataInterface {
     int nPointsTE{
         20};  // number of points for TE resampling when resampleTE=true, if set < 2 then no resampling as well
     LineStringTypeGrouping lineStringTypeGrouping;  // grouping of types for compound instance generation
+    TETypeGrouping teTypeGrouping;                  // grouping of types for traffic element instance generation
   };
   MapDataInterface(LaneletMapConstPtr laneletMap);
   MapDataInterface(LaneletMapConstPtr laneletMap, Configuration config);

@@ -107,7 +107,8 @@ class MapData {
                           traffic_rules::TrafficRulesPtr trafficRules,
                           lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph = nullptr,
                           bool ignoreMapElevation = false,
-                          const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
+                          const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping(),
+                          const TETypeGrouping& teTypeGrouping = getDefaultTETypeGrouping());
   bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType,
                   bool resampleLanes = true, int32_t nPointsLanes = 0,
                   bool resampleTE = true, int32_t nPointsTE = 0, double pitch = 0, double roll = 0);
@@ -198,6 +199,7 @@ class MapData {
 
   Optional<TensorInstanceData> tfData_;
   LineStringTypeGrouping lineStringTypeGrouping_{getDefaultLineStringTypeGrouping()};
+  TETypeGrouping teTypeGrouping_{getDefaultTETypeGrouping()};
 };
 
 }  // namespace ml_converter

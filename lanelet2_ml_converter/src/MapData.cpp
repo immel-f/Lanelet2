@@ -15,9 +15,10 @@ using namespace internal;
 MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                           traffic_rules::TrafficRulesPtr trafficRules,
                           lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation,
-                          const LineStringTypeGrouping& lineStringTypeGrouping) {
+                          const LineStringTypeGrouping& lineStringTypeGrouping, const TETypeGrouping& teTypeGrouping) {
   MapDataPtr data = std::make_shared<MapData>();
   data->lineStringTypeGrouping_ = lineStringTypeGrouping;
+  data->teTypeGrouping_ = teTypeGrouping;
   data->initLeftBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initLaneletInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
@@ -519,7 +520,8 @@ void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMa
       }
 
       TEType teType = teTypeToEnum(lineString);
-      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+      TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find associated lanelets via regulatory elements
       auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
@@ -548,7 +550,8 @@ void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapEl
       }
 
       TEType teType = teTypeToEnum(lineString);
-      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+      TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find the nearest intersecting lanelet
       Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);
@@ -573,7 +576,8 @@ void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool igno
       }
 
       TEType teType = teTypeToEnum(lineString);
-      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+      TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find associated stop line via regulatory elements
       auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
@@ -609,7 +613,8 @@ void MapData::collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignor
       }
 
       TEType teType = teTypeToEnum(lineString);
-      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+      TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
     }
   }
 }
@@ -628,7 +633,8 @@ void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapE
       }
 
       TEType teType = teTypeToEnum(lineString);
-      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, teType)});
+      TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
+      teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find the nearest intersecting lanelet
       Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);

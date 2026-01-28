@@ -94,6 +94,10 @@ struct OrientedRect {
 /// Each pair contains a vector of LineStringTypes that map to a representative LineStringType
 using LineStringTypeGrouping = std::vector<std::pair<std::vector<LineStringType>, LineStringType>>;
 
+/// @brief Type grouping for traffic elements: maps lists of TETypes to a representative TEType
+/// Each pair contains a vector of TETypes that map to a representative TEType
+using TETypeGrouping = std::vector<std::pair<std::vector<TEType>, TEType>>;
+
 /// @brief Get the default LineStringTypeGrouping where each type has its own group
 inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
   return {
@@ -217,6 +221,79 @@ inline bool areLineStringTypesSameGroup(LineStringType type1, LineStringType typ
                                         const LineStringTypeGrouping& grouping) {
   return getLineStringTypeGroupIndex(type1, grouping) == getLineStringTypeGroupIndex(type2, grouping) &&
          getLineStringTypeGroupIndex(type1, grouping) != -1;
+}
+
+/// @brief Get the default TETypeGrouping where each type has its own group
+inline TETypeGrouping getDefaultTETypeGrouping() {
+  return {
+      {{TEType::TLCar}, TEType::TLCar},
+      {{TEType::TLBike}, TEType::TLBike},
+      {{TEType::TLPedestrian}, TEType::TLPedestrian},
+      {{TEType::TLMisc}, TEType::TLMisc},
+      {{TEType::TSMisc}, TEType::TSMisc},
+      {{TEType::TSNoEntry}, TEType::TSNoEntry},
+      {{TEType::TSTurnRight}, TEType::TSTurnRight},
+      {{TEType::TSTurnLeft}, TEType::TSTurnLeft},
+      {{TEType::TSTurnLeftOrRight}, TEType::TSTurnLeftOrRight},
+      {{TEType::TSGoStraight}, TEType::TSGoStraight},
+      {{TEType::TSGoStraightOrRight}, TEType::TSGoStraightOrRight},
+      {{TEType::TSGoStraightOrLeft}, TEType::TSGoStraightOrLeft},
+      {{TEType::TSPassRight}, TEType::TSPassRight},
+      {{TEType::TSPassLeft}, TEType::TSPassLeft},
+      {{TEType::TSOneWayStreet}, TEType::TSOneWayStreet},
+      {{TEType::TSYield}, TEType::TSYield},
+      {{TEType::TSRightOfWay}, TEType::TSRightOfWay},
+      {{TEType::TSPriorityRoad}, TEType::TSPriorityRoad},
+      {{TEType::TSStop}, TEType::TSStop},
+      {{TEType::TSCrossbuck}, TEType::TSCrossbuck},
+      {{TEType::TSRoundabout}, TEType::TSRoundabout},
+      {{TEType::TSSpeedLimit}, TEType::TSSpeedLimit},
+      {{TEType::TSPedestrianCrossing}, TEType::TSPedestrianCrossing},
+      {{TEType::ArrowTurnRight}, TEType::ArrowTurnRight},
+      {{TEType::ArrowTurnLeft}, TEType::ArrowTurnLeft},
+      {{TEType::ArrowTurnLeftOrRight}, TEType::ArrowTurnLeftOrRight},
+      {{TEType::ArrowGoStraight}, TEType::ArrowGoStraight},
+      {{TEType::ArrowGoStraightOrRight}, TEType::ArrowGoStraightOrRight},
+      {{TEType::ArrowGoStraightOrLeft}, TEType::ArrowGoStraightOrLeft},
+      {{TEType::BikeSymbol}, TEType::BikeSymbol},
+      {{TEType::Symbol30}, TEType::Symbol30},
+      {{TEType::Symbol50}, TEType::Symbol50},
+      {{TEType::Symbol70}, TEType::Symbol70},
+      {{TEType::StopLine}, TEType::StopLine},
+      {{TEType::Unknown}, TEType::Unknown},
+  };
+}
+
+/// @brief Get the representative type for a TEType from the grouping
+/// @return The representative TEType if found, the input type if not found
+inline TEType getTETypeRepresentative(TEType type, const TETypeGrouping& grouping) {
+  for (const auto& pair : grouping) {
+    for (const auto& t : pair.first) {
+      if (t == type) {
+        return pair.second;
+      }
+    }
+  }
+  return type;
+}
+
+/// @brief Get the group index for a TEType
+/// @return The group index if found, -1 if not found
+inline int getTETypeGroupIndex(TEType type, const TETypeGrouping& grouping) {
+  for (size_t i = 0; i < grouping.size(); ++i) {
+    for (const auto& t : grouping[i].first) {
+      if (t == type) {
+        return static_cast<int>(i);
+      }
+    }
+  }
+  return -1;
+}
+
+/// @brief Check if two TE types are in the same group
+inline bool areTETypesSameGroup(TEType type1, TEType type2, const TETypeGrouping& grouping) {
+  return getTETypeGroupIndex(type1, grouping) == getTETypeGroupIndex(type2, grouping) &&
+         getTETypeGroupIndex(type1, grouping) != -1;
 }
 
 }  // namespace ml_converter

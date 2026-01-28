@@ -56,7 +56,8 @@ MapDataPtr MapDataInterface::getMapData(LaneletSubmapConstPtr localSubmap, const
                                         lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, double pitch,
                                         double roll, bool processAll) {
   MapDataPtr mapData = MapData::build(localSubmap, localSubmapGraph, trafficRules_, bikeSubmapGraph,
-                                      config_.ignoreMapElevation, config_.lineStringTypeGrouping);
+                                      config_.ignoreMapElevation, config_.lineStringTypeGrouping,
+                                      config_.teTypeGrouping);
   if (processAll) {
     mapData->processAll(bbox, config_.paramType, config_.resampleLanes, config_.nPointsLanes,
                         config_.resampleTE, config_.nPointsTE, pitch, roll);

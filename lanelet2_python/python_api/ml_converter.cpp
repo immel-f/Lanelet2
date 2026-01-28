@@ -279,6 +279,31 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       "Get M3TR default grouping: RoadBorderMerged grouping, merges Solid, SolidSolid, SolidDashed, and DashedSolid "
       "LineStringTypes");
 
+  // TETypeGrouping is a vector of pairs mapping TEType lists to representative TEType
+  typedef std::pair<std::vector<TEType>, TEType> TETypeGroupingPair;
+  class_<TETypeGroupingPair>("TETypeGroupingPair", "Pair of TEType list and representative TEType")
+      .def_readwrite("types", &TETypeGroupingPair::first)
+      .def_readwrite("representative", &TETypeGroupingPair::second);
+
+  typedef std::vector<std::pair<std::vector<TEType>, TEType>> TETypeGrouping;
+  class_<TETypeGrouping>("TETypeGrouping",
+                         "Type grouping for traffic elements: maps TEType lists to representative types")
+      .def(vector_indexing_suite<TETypeGrouping>());
+
+  def("getDefaultTETypeGrouping", &getDefaultTETypeGrouping,
+      "Get the default TETypeGrouping where each type has its own group");
+  def("getTETypeRepresentative", &getTETypeRepresentative, (arg("type"), arg("grouping")),
+      "Get the representative type for a TEType from the grouping");
+  def("getTETypeGroupIndex", &getTETypeGroupIndex, (arg("type"), arg("grouping")), "Get the group index for a TEType");
+  def("areTETypesSameGroup", &areTETypesSameGroup, (arg("type1"), arg("type2"), arg("grouping")),
+      "Check if two TE types are in the same group");
+  def("getLineStringTypeRepresentative", &getLineStringTypeRepresentative, (arg("type"), arg("grouping")),
+      "Get the representative type for a LineStringType from the grouping");
+  def("getLineStringTypeGroupIndex", &getLineStringTypeGroupIndex, (arg("type"), arg("grouping")),
+      "Get the group index for a LineStringType");
+  def("areLineStringTypesSameGroup", &areLineStringTypesSameGroup, (arg("type1"), arg("type2"), arg("grouping")),
+      "Check if two LineString types are in the same group");
+
   class_<OrientedRect>("OrientedRect", "Oriented rectangle for feature crop area", no_init)
       .add_property("bounds", make_function(&OrientedRect::bounds_const, return_value_policy<copy_const_reference>()));
 
@@ -473,7 +498,8 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
         .def_readwrite("nPointsLanes", &MapDataInterface::Configuration::nPointsLanes)
         .def_readwrite("resampleTE", &MapDataInterface::Configuration::resampleTE)
         .def_readwrite("nPointsTE", &MapDataInterface::Configuration::nPointsTE)
-        .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping);
+        .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping)
+        .def_readwrite("teTypeGrouping", &MapDataInterface::Configuration::teTypeGrouping);
   }
 
   // Eigen, stl etc. converters
