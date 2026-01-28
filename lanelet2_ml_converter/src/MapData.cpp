@@ -839,12 +839,17 @@ void MapData::updateAssociatedCpdInstanceIndices() {
   }
 }
 
-bool MapData::processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch,
-                         double roll) {
-  bool validLineStrings = processInstances(laneLineStrings_, bbox, paramType, nPoints, pitch, roll);
-  bool validLaneletInstances = processInstances(laneletInstances_, bbox, paramType, nPoints, pitch, roll);
-  bool validCompoundLineStrings = processInstances(compoundLaneLineStrings_, bbox, paramType, nPoints, pitch, roll);
-  bool validTEInstances = processInstances(teInstances_, bbox, paramType, nPoints, pitch, roll);
+bool MapData::processAll(const OrientedRect& bbox, const ParametrizationType& paramType, bool resampleLanes,
+                         int32_t nPointsLanes, bool resampleTE, int32_t nPointsTE, double pitch, double roll) {
+  // Process lane line strings: -1 signals no resampling
+  int32_t laneNPoints = (resampleLanes && nPointsLanes > 1) ? nPointsLanes : -1;
+  bool validLineStrings = processInstances(laneLineStrings_, bbox, paramType, laneNPoints, pitch, roll);
+  bool validLaneletInstances = processInstances(laneletInstances_, bbox, paramType, laneNPoints, pitch, roll);
+  bool validCompoundLineStrings = processInstances(compoundLaneLineStrings_, bbox, paramType, laneNPoints, pitch, roll);
+
+  // Process TE instances: -1 signals no resampling
+  int32_t teNPoints = (resampleTE && nPointsTE > 1) ? nPointsTE : -1;
+  bool validTEInstances = processInstances(teInstances_, bbox, paramType, teNPoints, pitch, roll);
 
   if (validLineStrings && validLaneletInstances && validCompoundLineStrings && validTEInstances) {
     return true;

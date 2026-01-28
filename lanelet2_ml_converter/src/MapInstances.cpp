@@ -10,8 +10,8 @@ namespace ml_converter {
 
 struct LStringProcessResult {
   BasicLineStrings3d cutInstances;
-  BasicLineStrings3d cutAndResampledInstances;
-  BasicLineStrings3d cutResampledAndTransformedInstances;
+  BasicLineStrings3d cutAndTransformedInstances;
+  BasicLineStrings3d cutTransformedAndResampledInstances;
   bool wasCut_{false};
   bool valid_{true};
 };
@@ -45,11 +45,20 @@ LStringProcessResult processLineStringImpl(const BasicLineString3d& lstring, con
     result.wasCut_ = true;
   }
 
+  // If nPoints <= 0, skip resampling (only cut and transform)
+  bool skipResampling = (nPoints <= 0);
+  
   for (const auto& line : cutLines) {
     result.cutInstances.push_back(line);
-    BasicLineString3d lineResampled = resampleLineString(line, nPoints);
-    result.cutAndResampledInstances.push_back(lineResampled);
-    result.cutResampledAndTransformedInstances.push_back(transformLineString(bbox, lineResampled, pitch, roll));
+    // Always transform after cutting
+    BasicLineString3d lineTransformed = transformLineString(bbox, line, pitch, roll);
+    result.cutAndTransformedInstances.push_back(lineTransformed);
+    
+    if (!skipResampling) {
+      // Resample the already-transformed line
+      BasicLineString3d lineResampled = resampleLineString(lineTransformed, nPoints);
+      result.cutTransformedAndResampledInstances.push_back(lineResampled);
+    }
   }
   return result;
 }
@@ -59,8 +68,8 @@ bool LaneLineStringInstance::process(const OrientedRect& bbox, const Parametriza
   LStringProcessResult result = processLineStringImpl(rawInstance_, bbox, paramType, nPoints, pitch, roll);
   if (result.valid_) {
     cutInstances_ = result.cutInstances;
-    cutAndResampledInstances_ = result.cutAndResampledInstances;
-    cutResampledAndTransformedInstances_ = result.cutResampledAndTransformedInstances;
+    cutAndTransformedInstances_ = result.cutAndTransformedInstances;
+    cutTransformedAndResampledInstances_ = result.cutTransformedAndResampledInstances;
   } else {
     valid_ = result.valid_;
   }
@@ -71,7 +80,11 @@ bool LaneLineStringInstance::process(const OrientedRect& bbox, const Parametriza
 
 std::vector<VectorXd> LaneLineStringInstance::computeInstanceVectors(bool onlyPoints, bool pointsIn2d) const {
   std::vector<VectorXd> featVecs;
-  for (const auto& split : cutResampledAndTransformedInstances_) {
+  // Use resampled if available, otherwise use transformed only
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
+                                      ? cutTransformedAndResampledInstances_ 
+                                      : cutAndTransformedInstances_;
+  for (const auto& split : source) {
     featVecs.push_back(toInstanceVector(split, typeInt(), onlyPoints, (pointsIn2d || processedFrom2d_)));
   }
   return featVecs;
@@ -100,7 +113,11 @@ std::vector<VectorXd> TEInstance::computeInstanceVectors(bool onlyPoints, bool p
 
 std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) const {
   std::vector<MatrixXd> pointMatrices;
-  for (const auto& split : cutResampledAndTransformedInstances_) {
+  // Use resampled if available, otherwise use transformed only
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
+                                      ? cutTransformedAndResampledInstances_ 
+                                      : cutAndTransformedInstances_;
+  for (const auto& split : source) {
     pointMatrices.push_back(toPointMatrix(split, (pointsIn2d || processedFrom2d_)));
   }
   return pointMatrices;
@@ -108,9 +125,15 @@ std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) con
 
 std::vector<MatrixXd> TEInstance::pointMatrices(bool pointsIn2d) const {
   std::vector<MatrixXd> pointMatrices;
-  for (const auto& split : cutResampledAndTransformedInstances_) {
+  
+  // Use resampled if available, otherwise use transformed only
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
+                                      ? cutTransformedAndResampledInstances_ 
+                                      : cutAndTransformedInstances_;
+  for (const auto& split : source) {
     pointMatrices.push_back(toPointMatrix(split, (pointsIn2d || processedFrom2d_)));
   }
+  
   return pointMatrices;
 }
 
@@ -119,8 +142,8 @@ bool TEInstance::process(const OrientedRect& bbox, const ParametrizationType& pa
   LStringProcessResult result = processLineStringImpl(rawInstance_, bbox, paramType, nPoints, pitch, roll);
   if (result.valid_) {
     cutInstances_ = result.cutInstances;
-    cutAndResampledInstances_ = result.cutAndResampledInstances;
-    cutResampledAndTransformedInstances_ = result.cutResampledAndTransformedInstances;
+    cutAndTransformedInstances_ = result.cutAndTransformedInstances;
+    cutTransformedAndResampledInstances_ = result.cutTransformedAndResampledInstances;
   } else {
     valid_ = result.valid_;
   }

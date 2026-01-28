@@ -68,8 +68,8 @@ void serialize(Archive& ar, lanelet::ml_converter::LineStringInstance& feat, con
   ar& make_nvp("MapInstance", boost::serialization::base_object<lanelet::ml_converter::MapInstance>(feat));
   ar& BOOST_SERIALIZATION_NVP(feat.rawInstance_);
   ar& BOOST_SERIALIZATION_NVP(feat.cutInstances_);
-  ar& BOOST_SERIALIZATION_NVP(feat.cutAndResampledInstances_);
-  ar& BOOST_SERIALIZATION_NVP(feat.cutResampledAndTransformedInstances_);
+  ar& BOOST_SERIALIZATION_NVP(feat.cutAndTransformedInstances_);
+  ar& BOOST_SERIALIZATION_NVP(feat.cutTransformedAndResampledInstances_);
 }
 
 template <class Archive>

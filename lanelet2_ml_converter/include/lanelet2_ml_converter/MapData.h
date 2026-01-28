@@ -94,7 +94,7 @@ class MapData {
     std::map<LineStringType, std::vector<CompoundLaneLineStringInstancePtr>> compoundLineStringInstancesByType_;
     // All traffic elements organized by type for efficient O(1) lookup
     std::map<TEType, std::vector<MatrixXd>> teInstancesByType_;
-    
+
     // Edge connections using type-local indices
     TEToCenterlineIndexEdges teToCenterlineIndexEdges_;
     TEToTEIndexEdges teToTEIndexEdges_;
@@ -108,8 +108,9 @@ class MapData {
                           lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph = nullptr,
                           bool ignoreMapElevation = false,
                           const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping());
-  bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, int32_t nPoints, double pitch = 0,
-                  double roll = 0);
+  bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType,
+                  bool resampleLanes = true, int32_t nPointsLanes = 0,
+                  bool resampleTE = true, int32_t nPointsTE = 0, double pitch = 0, double roll = 0);
 
   LaneLineStringInstances lineStringsOfType(LineStringType type) const;
 
@@ -150,8 +151,7 @@ class MapData {
   void initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                              lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                              traffic_rules::TrafficRulesPtr trafficRules,
-                             lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph,
-                             bool ignoreMapElevation = false);
+                             lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation = false);
   void updateAssociatedCpdInstanceIndices();
   void getPaths(lanelet::routing::RoutingGraphConstPtr localSubmapGraph, std::vector<ConstLanelets>& paths,
                 ConstLanelet start, ConstLanelets initPath = ConstLanelets());
@@ -170,7 +170,7 @@ class MapData {
   void collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
   void collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
   void collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
-  
+
   // Convert teEdges_ to instance pointer associations
   void convertTEEdges();
 
@@ -187,13 +187,13 @@ class MapData {
   // Maps LineStringType to a map of (mapId -> vector of compound feature indices)
   std::map<LineStringType, std::map<Id, std::vector<size_t>>> associatedCpdLineStringsIndices_;
 
-  Edges llEdges_;     // edge list for lanelet/centerline connectivity
-  Edges teEdges_;     // edge list for traffic element connectivity (e.g., traffic light to stop line)
-  
+  Edges llEdges_;  // edge list for lanelet/centerline connectivity
+  Edges teEdges_;  // edge list for traffic element connectivity (e.g., traffic light to stop line)
+
   // Converted TE edge associations
   TEToCenterlineEdges teToCenterlineEdges_;
   TEToTEEdges teToTEEdges_;
-  
+
   std::string uuid_;  // sample id
 
   Optional<TensorInstanceData> tfData_;

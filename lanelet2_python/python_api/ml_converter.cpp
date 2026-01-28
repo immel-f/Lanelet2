@@ -312,10 +312,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
                     make_function(&LineStringInstance::rawInstance, return_value_policy<copy_const_reference>()))
       .add_property("cutInstance",
                     make_function(&LineStringInstance::cutInstance, return_value_policy<copy_const_reference>()))
-      .add_property("cutAndResampledInstance", make_function(&LineStringInstance::cutAndResampledInstance,
-                                                             return_value_policy<copy_const_reference>()))
-      .add_property("cutResampledAndTransformedInstance",
-                    make_function(&LineStringInstance::cutResampledAndTransformedInstance,
+      .add_property("cutAndTransformedInstance", make_function(&LineStringInstance::cutAndTransformedInstance,
+                                                               return_value_policy<copy_const_reference>()))
+      .add_property("cutTransformedAndResampledInstance",
+                    make_function(&LineStringInstance::cutTransformedAndResampledInstance,
                                   return_value_policy<copy_const_reference>()))
       .def("computeInstanceVectors", pure_virtual(&LineStringInstance::computeInstanceVectors),
            (arg("onlyPoints"), arg("pointsIn2d")))
@@ -395,8 +395,7 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def(init<>())
             .def("build", &MapData::build,
                  (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"),
-                  arg("bikeSubmapGraph") = routing::RoutingGraphConstPtr(),
-                  arg("ignoreMapElevation") = false,
+                  arg("bikeSubmapGraph") = routing::RoutingGraphConstPtr(), arg("ignoreMapElevation") = false,
                   arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping()))
             .staticmethod("build")
             .def("processAll", &MapData::processAll)
@@ -464,13 +463,16 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def("mapDataBatch", mapDataBatch6d, (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")));
 
     class_<MapDataInterface::Configuration>("Configuration", "Configuration class for MapDataInterface", init<>())
-        .def(init<LaneletRepresentationType, ParametrizationType, double, double, int>())
+        .def(init<LaneletRepresentationType, ParametrizationType, double, double, int, int>())
         .def_readwrite("reprType", &MapDataInterface::Configuration::reprType)
         .def_readwrite("paramType", &MapDataInterface::Configuration::paramType)
         .def_readwrite("submapExtentLongitudinal", &MapDataInterface::Configuration::submapExtentLongitudinal)
         .def_readwrite("submapExtentLateral", &MapDataInterface::Configuration::submapExtentLateral)
-        .def_readwrite("nPoints", &MapDataInterface::Configuration::nPoints)
         .def_readwrite("ignoreMapElevation", &MapDataInterface::Configuration::ignoreMapElevation)
+        .def_readwrite("resampleLanes", &MapDataInterface::Configuration::resampleLanes)
+        .def_readwrite("nPointsLanes", &MapDataInterface::Configuration::nPointsLanes)
+        .def_readwrite("resampleTE", &MapDataInterface::Configuration::resampleTE)
+        .def_readwrite("nPointsTE", &MapDataInterface::Configuration::nPointsTE)
         .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping);
   }
 

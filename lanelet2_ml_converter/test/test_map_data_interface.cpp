@@ -28,7 +28,8 @@ TEST_F(MLConverterTest, MapDataInterface) {  // NOLINT
   config.paramType = ParametrizationType::LineString;
   config.submapExtentLongitudinal = 5;
   config.submapExtentLateral = 3;
-  config.nPoints = 20;
+  config.nPointsLanes = 20;
+  config.nPointsTE = 20;
 
   MapDataInterface parser(laneletMap, config);
   std::vector<BasicPoint2d> pts{BasicPoint2d(0, -3), BasicPoint2d(3, -3), BasicPoint2d(5, -3),
@@ -117,7 +118,8 @@ TEST_F(MLConverterTest, MapDataSaveLoad) {
   config.paramType = ParametrizationType::LineString;
   config.submapExtentLongitudinal = 5;
   config.submapExtentLateral = 3;
-  config.nPoints = 20;
+  config.nPointsLanes = 20;
+  config.nPointsTE = 20;
   MapDataInterface parser(laneletMap, config);
 
   std::vector<BasicPoint2d> pts{BasicPoint2d(0, -3), BasicPoint2d(3, -3), BasicPoint2d(5, -3),
@@ -209,7 +211,8 @@ TEST_F(MLConverterTest, MapDataInterfaceTrafficElements) {  // NOLINT
   config.paramType = ParametrizationType::LineString;
   config.submapExtentLongitudinal = 10;
   config.submapExtentLateral = 5;
-  config.nPoints = 20;
+  config.nPointsLanes = 20;
+  config.nPointsTE = 20;
 
   MapDataInterface parser(laneletMap, config);
 
@@ -258,7 +261,9 @@ TEST_F(MLConverterTest, MapDataInterfaceBatchTrafficElements) {  // NOLINT
   config.paramType = ParametrizationType::LineString;
   config.submapExtentLongitudinal = 8;
   config.submapExtentLateral = 4;
-  config.nPoints = 20;
+  config.nPointsLanes = 20;
+  config.nPointsTE = 10;
+  config.resampleTE = false;
 
   MapDataInterface parser(laneletMap, config);
 
@@ -301,6 +306,132 @@ TEST_F(MLConverterTest, MapDataInterfaceBatchTrafficElements) {  // NOLINT
 
     if (hasAnyTE) {
       EXPECT_TRUE(teToCenterline.size() > 0 || teToTE.size() > 0);
+    }
+  }
+}
+
+TEST_F(MLConverterTest, MapDataInterfaceResamplingOptions) {  // NOLINT
+  // Test 1: Disable lane resampling
+  {
+    MapDataInterface::Configuration config{};
+    config.reprType = LaneletRepresentationType::Centerline;
+    config.paramType = ParametrizationType::LineString;
+    config.submapExtentLongitudinal = 5;
+    config.submapExtentLateral = 3;
+    config.resampleLanes = false;  // No resampling for lanes
+    config.nPointsTE = 15;
+    config.resampleTE = true;
+
+    MapDataInterface parser(laneletMap, config);
+    BasicPoint2d pos(3, -3);
+    double yaw = 0;
+
+    parser.setCurrPosAndExtractSubmap2d(pos, yaw);
+    MapDataPtr mapData = parser.mapData(true);
+
+    EXPECT_TRUE(mapData != nullptr);
+
+    auto tfData = mapData->getTensorInstanceData(true, false);
+    auto centerlines = tfData.compoundLineStringsOfType(LineStringType::Centerline);
+
+    // With resampleLanes=false, centerlines should NOT be forced to nPointsLanes
+    // At least one should have a different point count
+    if (!centerlines.empty()) {
+      bool hasNonResampledCount = false;
+      for (const auto& centerline : centerlines) {
+        if (centerline.rows() != static_cast<int>(config.nPointsLanes)) {
+          hasNonResampledCount = true;
+          break;
+        }
+      }
+      EXPECT_TRUE(hasNonResampledCount);
+    }
+  }
+
+  // Test 2: Different nPoints for lanes and TEs
+  {
+    MapDataInterface::Configuration config{};
+    config.reprType = LaneletRepresentationType::Centerline;
+    config.paramType = ParametrizationType::LineString;
+    config.submapExtentLongitudinal = 10;
+    config.submapExtentLateral = 5;
+    config.resampleLanes = true;
+    config.nPointsLanes = 25;
+    config.resampleTE = true;
+    config.nPointsTE = 10;
+
+    MapDataInterface parser(laneletMap, config);
+    BasicPoint2d pos(6, -1);
+    double yaw = 0;
+
+    parser.setCurrPosAndExtractSubmap2d(pos, yaw);
+    MapDataPtr mapData = parser.mapData(true);
+
+    EXPECT_TRUE(mapData != nullptr);
+
+    auto tfData = mapData->getTensorInstanceData(true, false);
+    auto centerlines = tfData.compoundLineStringsOfType(LineStringType::Centerline);
+    auto stopLines = tfData.teInstancesOfType(TEType::StopLine);
+
+    // Verify lanes have 25 points
+    for (const auto& centerline : centerlines) {
+      EXPECT_EQ(centerline.rows(), 25);
+    }
+
+    // Verify TEs have 10 points
+    for (const auto& stopLine : stopLines) {
+      EXPECT_EQ(stopLine.rows(), 10);
+    }
+  }
+
+  // Test 3: Both disabled
+  {
+    MapDataInterface::Configuration config{};
+    config.reprType = LaneletRepresentationType::Centerline;
+    config.paramType = ParametrizationType::LineString;
+    config.submapExtentLongitudinal = 8;
+    config.submapExtentLateral = 4;
+    config.resampleLanes = false;
+    config.resampleTE = false;
+
+    MapDataInterface parser(laneletMap, config);
+    BasicPoint2d pos(6, -1);
+    double yaw = 0;
+
+    parser.setCurrPosAndExtractSubmap2d(pos, yaw);
+    MapDataPtr mapData = parser.mapData(true);
+
+    EXPECT_TRUE(mapData != nullptr);
+    // Just verify it processes without error when both are disabled
+  }
+
+  // Test 4: Custom nPoints for lanes only (TE uses default)
+  {
+    MapDataInterface::Configuration config{};
+    config.reprType = LaneletRepresentationType::Centerline;
+    config.paramType = ParametrizationType::LineString;
+    config.submapExtentLongitudinal = 8;
+    config.submapExtentLateral = 4;
+    config.resampleLanes = true;
+    config.nPointsLanes = 30;
+    config.resampleTE = true;
+    config.nPointsTE = 20;  // Explicit value
+
+    MapDataInterface parser(laneletMap, config);
+    BasicPoint2d pos(6, -1);
+    double yaw = 0;
+
+    parser.setCurrPosAndExtractSubmap2d(pos, yaw);
+    MapDataPtr mapData = parser.mapData(true);
+
+    EXPECT_TRUE(mapData != nullptr);
+
+    auto tfData = mapData->getTensorInstanceData(true, false);
+    auto centerlines = tfData.compoundLineStringsOfType(LineStringType::Centerline);
+
+    // Verify lanes have 30 points
+    for (const auto& centerline : centerlines) {
+      EXPECT_EQ(centerline.rows(), 30);
     }
   }
 }

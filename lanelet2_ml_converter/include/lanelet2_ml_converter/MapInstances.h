@@ -56,8 +56,8 @@ class LineStringInstance : public MapInstance {
                        double pitch = 0, double roll = 0) = 0;
 
   const BasicLineStrings3d& cutInstance() const { return cutInstances_; }
-  const BasicLineStrings3d& cutAndResampledInstance() const { return cutAndResampledInstances_; }
-  const BasicLineStrings3d& cutResampledAndTransformedInstance() const { return cutResampledAndTransformedInstances_; }
+  const BasicLineStrings3d& cutAndTransformedInstance() const { return cutAndTransformedInstances_; }
+  const BasicLineStrings3d& cutTransformedAndResampledInstance() const { return cutTransformedAndResampledInstances_; }
 
   template <class Archive>
   friend void boost::serialization::serialize(Archive& ar, lanelet::ml_converter::LineStringInstance& feat,
@@ -68,8 +68,8 @@ class LineStringInstance : public MapInstance {
  protected:
   BasicLineString3d rawInstance_;
   BasicLineStrings3d cutInstances_;
-  BasicLineStrings3d cutAndResampledInstances_;
-  BasicLineStrings3d cutResampledAndTransformedInstances_;
+  BasicLineStrings3d cutAndTransformedInstances_;
+  BasicLineStrings3d cutTransformedAndResampledInstances_;
   LineStringInstance() {}
   LineStringInstance(const BasicLineString3d& feature, Id mapID) : MapInstance(mapID), rawInstance_{feature} {}
 };

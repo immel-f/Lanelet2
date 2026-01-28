@@ -18,19 +18,25 @@ class MapDataInterface {
   struct Configuration {
     Configuration() noexcept : lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
     Configuration(LaneletRepresentationType reprType, ParametrizationType paramType, double submapExtentLongitudinal,
-                  double submapExtentLateral, int nPoints) noexcept
+                  double submapExtentLateral, int nPointsLanes, int nPointsTE) noexcept
         : reprType{reprType},
           paramType{paramType},
           submapExtentLongitudinal{submapExtentLongitudinal},
           submapExtentLateral{submapExtentLateral},
-          nPoints{nPoints},
+          nPointsLanes{nPointsLanes},
+          nPointsTE{nPointsTE},
           lineStringTypeGrouping{getDefaultLineStringTypeGrouping()} {}
     LaneletRepresentationType reprType{LaneletRepresentationType::Boundaries};
     ParametrizationType paramType{ParametrizationType::LineString};
     double submapExtentLongitudinal{30};  // in driving direction
     double submapExtentLateral{15};       // in lateral direction
-    int nPoints{20};
-    bool ignoreMapElevation{false};  // if true, elevation (z coordinate) in map elements is ignored and set to 0
+    bool ignoreMapElevation{false};       // if true, elevation (z coordinate) in map elements is ignored and set to 0
+    bool resampleLanes{true};             // if true, lane instances are resampled; if false, no fixed resampling
+    int nPointsLanes{
+        20};  // number of points for lane resampling when resampleLanes=true, if set < 2 then no resampling as well
+    bool resampleTE{true};  // if true, TE instances are resampled; if false, no fixed resampling
+    int nPointsTE{
+        20};  // number of points for TE resampling when resampleTE=true, if set < 2 then no resampling as well
     LineStringTypeGrouping lineStringTypeGrouping;  // grouping of types for compound instance generation
   };
   MapDataInterface(LaneletMapConstPtr laneletMap);

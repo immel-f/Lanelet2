@@ -12,12 +12,23 @@ TEST_F(MLConverterTest, LaneLineStringInstance) {  // NOLINT
                              BasicPoint3d{20, 0, 0}};
   LaneLineStringInstance feat(polyline, Id(123), LineStringType::Solid, Ids(1234), false);
 
+  BasicPoint3d centerBbox{0, 0, 0};
+  const double extentLongitudinalBbox{15};
+  const double extentLateralBbox{10};
+  double yawBbox{0};
+  OrientedRect bbox{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+
   feat.process(bbox, ParametrizationType::LineString, 4);
-  EXPECT_EQ(feat.cutAndResampledInstance().size(), 1);
-  EXPECT_EQ(feat.cutAndResampledInstance()[0].size(), 4);
-  EXPECT_NEAR(feat.cutAndResampledInstance()[0][0].x(), 0, 10e-5);
-  EXPECT_NEAR(feat.cutAndResampledInstance()[0][1].x(), 5, 10e-5);
-  EXPECT_NEAR(feat.cutAndResampledInstance()[0][3].x(), 15, 10e-5);
+  EXPECT_EQ(feat.cutTransformedAndResampledInstance().size(), 1);
+  EXPECT_EQ(feat.cutTransformedAndResampledInstance()[0].size(), 4);
+  EXPECT_NEAR(feat.cutTransformedAndResampledInstance()[0][0].x(), 0, 10e-5);
+  EXPECT_NEAR(feat.cutTransformedAndResampledInstance()[0][1].x(), 5, 10e-5);
+  EXPECT_NEAR(feat.cutTransformedAndResampledInstance()[0][3].x(), 15, 10e-5);
+
+  centerBbox = BasicPoint3d{5, 5, 0};
+  yawBbox = M_PI / 2.0;
+  bbox = OrientedRect{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+  feat.process(bbox, ParametrizationType::LineString, 4);
 
   std::vector<VectorXd> vec = feat.computeInstanceVectors(false, true);
   EXPECT_EQ(vec.size(), 1);
@@ -53,11 +64,22 @@ TEST_F(MLConverterTest, LaneletInstance) {  // NOLINT
   LaneletInstance llFeat(leftBdFeat, rightBdFeat, centerlineFeat, Id(1234));
   llFeat.setReprType(LaneletRepresentationType::Boundaries);
 
+  BasicPoint3d centerBbox{0, 0, 0};
+  const double extentLongitudinalBbox{15};
+  const double extentLateralBbox{10};
+  double yawBbox{0};
+  OrientedRect bbox{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+
   llFeat.process(bbox, ParametrizationType::LineString, 4);
-  EXPECT_EQ(llFeat.centerline()->cutAndResampledInstance()[0].size(), 4);
-  EXPECT_NEAR(llFeat.centerline()->cutAndResampledInstance()[0][0].x(), 0, 10e-5);
-  EXPECT_NEAR(llFeat.centerline()->cutAndResampledInstance()[0][1].x(), 5, 10e-5);
-  EXPECT_NEAR(llFeat.centerline()->cutAndResampledInstance()[0][3].x(), 15, 10e-5);
+  EXPECT_EQ(llFeat.centerline()->cutTransformedAndResampledInstance()[0].size(), 4);
+  EXPECT_NEAR(llFeat.centerline()->cutTransformedAndResampledInstance()[0][0].x(), 0, 10e-5);
+  EXPECT_NEAR(llFeat.centerline()->cutTransformedAndResampledInstance()[0][1].x(), 5, 10e-5);
+  EXPECT_NEAR(llFeat.centerline()->cutTransformedAndResampledInstance()[0][3].x(), 15, 10e-5);
+
+  centerBbox = BasicPoint3d{5, 5, 0};
+  yawBbox = M_PI / 2.0;
+  bbox = OrientedRect{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+  llFeat.process(bbox, ParametrizationType::LineString, 4);
 
   std::vector<VectorXd> vec = llFeat.computeInstanceVectors(false, true);
   EXPECT_EQ(vec.size(), 1);
@@ -88,18 +110,30 @@ TEST_F(MLConverterTest, CompoundLaneLineStringInstance) {  // NOLINT
   CompoundLaneLineStringInstance cpdFeat(LaneLineStringInstanceList{feat1, feat2, feat3, feat4, feat5},
                                          LineStringType::Solid);
 
-  cpdFeat.process(bbox, ParametrizationType::LineString, 5);
-  EXPECT_EQ(cpdFeat.cutAndResampledInstance().size(), 1);
-  EXPECT_EQ(cpdFeat.cutAndResampledInstance()[0].size(), 5);
-  EXPECT_NEAR(cpdFeat.cutAndResampledInstance()[0][0].x(), -5, 10e-5);
-  EXPECT_NEAR(cpdFeat.cutAndResampledInstance()[0][1].x(), 0, 10e-5);
-  EXPECT_NEAR(cpdFeat.cutAndResampledInstance()[0][3].x(), 10, 10e-5);
+  BasicPoint3d centerBbox{0, 0, 0};
+  double extentLongitudinalBbox{5};
+  const double extentLateralBbox{10};
+  double yawBbox{0};
+  OrientedRect bbox{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+
+  cpdFeat.process(bbox, ParametrizationType::LineString, 3);
+  EXPECT_EQ(cpdFeat.cutTransformedAndResampledInstance().size(), 1);
+  EXPECT_EQ(cpdFeat.cutTransformedAndResampledInstance()[0].size(), 3);
+  EXPECT_NEAR(cpdFeat.cutTransformedAndResampledInstance()[0][0].x(), -5, 10e-5);
+  EXPECT_NEAR(cpdFeat.cutTransformedAndResampledInstance()[0][1].x(), 0, 10e-5);
+  EXPECT_NEAR(cpdFeat.cutTransformedAndResampledInstance()[0][2].x(), 5, 10e-5);
 
   EXPECT_NEAR(cpdFeat.pathLengthsProcessed().front(), 0, 10e-5);
   EXPECT_EQ(cpdFeat.processedInstancesValid().front(), false);
   double cpdFeatLength =
       boost::geometry::length(cpdFeat.cutInstance()[0], boost::geometry::strategy::distance::pythagoras<double>());
   EXPECT_NEAR(cpdFeatLength, cpdFeat.pathLengthsProcessed().back(), 10e-5);
+
+  centerBbox = BasicPoint3d{5, 5, 0};
+  extentLongitudinalBbox = 15;
+  yawBbox = M_PI / 2.0;
+  bbox = OrientedRect{getRotatedRect(centerBbox, extentLongitudinalBbox, extentLateralBbox, yawBbox, true)};
+  cpdFeat.process(bbox, ParametrizationType::LineString, 5);
 
   std::vector<VectorXd> vec = cpdFeat.computeInstanceVectors(false, true);
   EXPECT_EQ(vec.size(), 1);
