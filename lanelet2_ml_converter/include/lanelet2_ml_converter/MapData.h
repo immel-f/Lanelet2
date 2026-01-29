@@ -171,6 +171,7 @@ class MapData {
   void collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
   void collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
   void collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
+  void collectPedestrianCrossings(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
 
   // Convert teEdges_ to instance pointer associations
   void convertTEEdges();

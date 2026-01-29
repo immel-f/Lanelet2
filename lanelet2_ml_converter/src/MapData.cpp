@@ -23,7 +23,6 @@ MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::
   data->initRightBoundaries(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initLaneletInstances(localSubmap, localSubmapGraph, trafficRules, ignoreMapElevation);
   data->initCompoundInstances(localSubmap, localSubmapGraph, trafficRules, bikeSubmapGraph, ignoreMapElevation);
-  data->updateAssociatedCpdInstanceIndices();
 
   // Collect non-lane traffic elements
   data->collectStopLines(localSubmap, ignoreMapElevation);
@@ -31,6 +30,10 @@ MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::
   data->collectTrafficLights(localSubmap, ignoreMapElevation);
   data->collectTrafficSigns(localSubmap, ignoreMapElevation);
   data->collectSymbols(localSubmap, ignoreMapElevation);
+  data->collectPedestrianCrossings(localSubmap, ignoreMapElevation);
+
+  // Update association indices after all compound instances are collected
+  data->updateAssociatedCpdInstanceIndices();
 
   // Convert TE edges to instance associations
   data->convertTEEdges();
@@ -641,6 +644,65 @@ void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapE
       if (laneletId) {
         teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
       }
+    }
+  }
+}
+
+void MapData::collectPedestrianCrossings(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
+  for (const auto& ll : localSubmap->laneletLayer) {
+    Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
+    if (subtype == "crosswalk") {
+      // Determine the crossing type from borders (Zebra has precedence over PedestrianMarking)
+      LineStringType leftType = bdTypeToEnum(ll.leftBound3d());
+      LineStringType rightType = bdTypeToEnum(ll.rightBound3d());
+
+      LineStringType crossingType = LineStringType::PedestrianCrossing;  // default
+      if (leftType == LineStringType::ZebraCrossing || rightType == LineStringType::ZebraCrossing) {
+        crossingType = LineStringType::ZebraCrossing;
+      } else if (leftType == LineStringType::PedestrianCrossing || rightType == LineStringType::PedestrianCrossing) {
+        crossingType = LineStringType::PedestrianCrossing;
+      } else {
+        std::cout << "Warning: Crosswalk Lanelet " << ll.id()
+                  << " has left and right borders that are not zebra_marking or pedestrian_marking, assuming "
+                     "LineStringType::PedestrianCrossing"
+                  << std::endl;
+      }
+
+      // Construct perimeter: left border + right border inverted + start point to close
+      BasicLineString3d leftBorder = ll.leftBound3d().inverted() ? ll.leftBound3d().invert().basicLineString()
+                                                                 : ll.leftBound3d().basicLineString();
+      BasicLineString3d rightBorder = ll.rightBound3d().inverted() ? ll.rightBound3d().invert().basicLineString()
+                                                                   : ll.rightBound3d().basicLineString();
+
+      // Build perimeter linestring
+      BasicLineString3d perimeter;
+
+      // Add left border points
+      for (const auto& pt : leftBorder) {
+        perimeter.push_back(ignoreMapElevation ? BasicPoint3d(pt.x(), pt.y(), 0) : pt);
+      }
+
+      // Add right border points in reverse order (inverted)
+      for (auto it = rightBorder.rbegin(); it != rightBorder.rend(); ++it) {
+        perimeter.push_back(ignoreMapElevation ? BasicPoint3d(it->x(), it->y(), 0) : *it);
+      }
+
+      // Close the perimeter by adding the first point of left border again
+      if (!leftBorder.empty()) {
+        perimeter.push_back(ignoreMapElevation ? BasicPoint3d(leftBorder.front().x(), leftBorder.front().y(), 0)
+                                               : leftBorder.front());
+      }
+
+      // Create a LaneLineStringInstance for the perimeter
+      // Use the left border's ID as mapID to avoid duplicate association (since laneletID is already tracked)
+      Id perimeterMapId = ll.leftBound3d().id();
+      LaneLineStringInstancePtr perimeterInstance =
+          std::make_shared<LaneLineStringInstance>(perimeter, perimeterMapId, crossingType, Ids{ll.id()}, false);
+
+      // Wrap in a list and create CompoundLaneLineStringInstance
+      LaneLineStringInstanceList perimeterList;
+      perimeterList.push_back(perimeterInstance);
+      compoundLaneLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(perimeterList, crossingType));
     }
   }
 }

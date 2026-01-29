@@ -48,6 +48,10 @@ inline std::string lineStringTypeToString(LineStringType type) {
     return "BikeCenterline";
   else if (type == LineStringType::Unknown)
     return "Unknown";
+  else if (type == LineStringType::PedestrianCrossing)
+    return "PedestrianCrossing";
+  else if (type == LineStringType::ZebraCrossing)
+    return "ZebraCrossing";
   else {
     throw std::runtime_error("Unexpected Line String type!");
     return "Unknown";
@@ -72,6 +76,10 @@ inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
     return LineStringType::Fence;
   } else if (type == AttributeValueString::Virtual) {
     return LineStringType::Virtual;
+  } else if (type == AttributeValueString::Zebra) {
+    return LineStringType::ZebraCrossing;
+  } else if (type == AttributeValueString::PedestrianMarking) {
+    return LineStringType::PedestrianCrossing;
   }
 
   // Check subtype for lane marking types
@@ -142,6 +150,10 @@ inline TEType teTypeToEnum(const ConstLineString3d& te) {
       return TEType::TLPedestrian;
     }
     return TEType::TLMisc;  // Default for unknown traffic light subtypes
+  }
+
+  if (type == "traffic_light_misc") {
+    return TEType::TLMisc;
   }
 
   // Handle traffic light pedestrians as separate type

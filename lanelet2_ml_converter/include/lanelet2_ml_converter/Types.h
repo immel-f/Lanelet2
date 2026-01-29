@@ -185,7 +185,6 @@ inline LineStringTypeGrouping getM3TRDefaultGrouping() {
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
       {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
       {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
-      {{LineStringType::PedestrianCrossing}, LineStringType::PedestrianCrossing},
       {{LineStringType::PedestrianCrossing, LineStringType::ZebraCrossing}, LineStringType::PedestrianCrossing},
   };
 }

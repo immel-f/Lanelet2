@@ -216,7 +216,12 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       .value("BikeCenterline", LineStringType::BikeCenterline)
       .value("Unknown", LineStringType::Unknown)
       .value("DrivableArea", LineStringType::DrivableArea)
-      .value("Divider", LineStringType::Divider);
+      .value("Divider", LineStringType::Divider)
+      .value("BikeMarkingDashed", LineStringType::BikeMarkingDashed)
+      .value("BikeMarkingSolid", LineStringType::BikeMarkingSolid)
+      .value("GuardRail", LineStringType::GuardRail)
+      .value("PedestrianCrossing", LineStringType::PedestrianCrossing)
+      .value("ZebraCrossing", LineStringType::ZebraCrossing);
 
   enum_<TEType>("TEType")
       .value("TLCar", TEType::TLCar)
