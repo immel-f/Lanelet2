@@ -58,9 +58,11 @@ inline std::string lineStringTypeToString(LineStringType type) {
   }
 }
 
-inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
-  Attribute type = lString.attributeOr(AttributeName::Type, "");
-  Attribute subtype = lString.attributeOr(AttributeName::Subtype, "");
+// Template version that works with both ConstLineString3d and ConstPolygon3d
+template <typename T>
+inline LineStringType bdTypeToEnum(const T& element) {
+  Attribute type = element.attributeOr(AttributeName::Type, "");
+  Attribute subtype = element.attributeOr(AttributeName::Subtype, "");
 
   // Check for specific types first
   if (type == AttributeValueString::RoadBorder) {
@@ -99,7 +101,19 @@ inline LineStringType bdTypeToEnum(ConstLineString3d lString) {
   return LineStringType::Unknown;
 }
 
-inline TEType teTypeToEnum(const ConstLineString3d& te) {
+// Concrete overload for ConstLineString3d (used by Python bindings)
+inline LineStringType bdTypeToEnum(const ConstLineString3d& lString) {
+  return bdTypeToEnum<ConstLineString3d>(lString);
+}
+
+// Concrete overload for ConstPolygon3d (used by Python bindings)
+inline LineStringType bdTypeToEnumPolygon(const ConstPolygon3d& polygon) {
+  return bdTypeToEnum<ConstPolygon3d>(polygon);
+}
+
+// Template version that works with both ConstLineString3d and ConstPolygon3d
+template <typename T>
+inline TEType teTypeToEnum(const T& te) {
   Attribute type = te.attributeOr(AttributeName::Type, "");
   Attribute subtype = te.attributeOr(AttributeName::Subtype, "");
 
@@ -213,6 +227,12 @@ inline TEType teTypeToEnum(const ConstLineString3d& te) {
   // Default to Unknown if no match found
   return TEType::Unknown;
 }
+
+// Concrete overload for ConstLineString3d (used by Python bindings)
+inline TEType teTypeToEnum(const ConstLineString3d& te) { return teTypeToEnum<ConstLineString3d>(te); }
+
+// Concrete overload for ConstPolygon3d (used by Python bindings)
+inline TEType teTypeToEnumPolygon(const ConstPolygon3d& te) { return teTypeToEnum<ConstPolygon3d>(te); }
 
 BasicLineString3d resampleLineString(const BasicLineString3d& polyline, int32_t nPoints);
 
