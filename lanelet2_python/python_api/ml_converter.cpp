@@ -316,8 +316,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
       (arg("center"), arg("extentLongitudinal"), arg("extentLateral"), arg("yaw"), arg("from2dPos")));
   def("extractSubmap", &extractSubmap,
       (arg("laneletMap"), arg("center"), arg("extentLongitudinal"), arg("extentLateral")));
-  def("bdTypeToEnum", &bdTypeToEnum, (arg("lstring")));
-  def("teTypeToEnum", &teTypeToEnum, (arg("te")));
+  def("bdTypeToEnum", static_cast<LineStringType (*)(const ConstLineString3d &)>(&bdTypeToEnum), (arg("lstring")));
+  def("bdTypeToEnumPolygon", &bdTypeToEnumPolygon, (arg("polygon")));
+  def("teTypeToEnum", static_cast<TEType (*)(const ConstLineString3d &)>(&teTypeToEnum), (arg("te")));
+  def("teTypeToEnumPolygon", &teTypeToEnumPolygon, (arg("te")));
   def("resampleLineString", &resampleLineString, (arg("polyline"), arg("nPoints")));
   def("cutLineString", &cutLineString, (arg("bbox"), arg("polyline")));
   def("transformLineString", &transformLineString, (arg("bbox"), arg("polyline"), arg("pitch"), arg("roll")));

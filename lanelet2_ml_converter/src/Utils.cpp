@@ -62,6 +62,11 @@ LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPo
     submapPtr->add(lineString);
   }
 
+  Polygons3d polygonsInRegion = nonConstMap->polygonLayer.search(initSearchRegion);
+  for (const auto& polygon : polygonsInRegion) {
+    submapPtr->add(polygon);
+  }
+
   // Extract regulatory elements in the search region and add them to the submap
   RegulatoryElementPtrs regElemsInRegion = nonConstMap->regulatoryElementLayer.search(initSearchRegion);
   for (const auto& regElem : regElemsInRegion) {

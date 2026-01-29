@@ -469,19 +469,27 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
   }
 }
 
-Optional<Id> findNearestIntersectingLanelet(const ConstLineString3d& lineString, LaneletSubmapConstPtr& localSubmap,
+// Template helper to find nearest intersecting lanelet for both linestrings and polygons
+template <typename T>
+Optional<Id> findNearestIntersectingLanelet(const T& element, LaneletSubmapConstPtr& localSubmap,
                                             bool requireIntersection = true, double maxDistance = 1.0) {
-  // Convert to 2D hybrid linestring
-  ConstHybridLineString2d ls2d = utils::to2D(utils::toHybrid(lineString));
+  // Convert to BasicLineString3d - works for both ConstLineString3d and ConstPolygon3d
+  BasicLineString3d basicElement = element.basicLineString();
+
+  // Convert to 2D linestring directly
+  BasicLineString2d ls2d;
+  for (const auto& pt : basicElement) {
+    ls2d.push_back(BasicPoint2d(pt.x(), pt.y()));
+  }
 
   // Calculate centroid for nearest lanelet query
   BasicPoint2d centroid(0.0, 0.0);
-  for (const auto& pt : lineString) {
+  for (const auto& pt : basicElement) {
     centroid.x() += pt.x();
     centroid.y() += pt.y();
   }
-  centroid.x() /= lineString.size();
-  centroid.y() /= lineString.size();
+  centroid.x() /= basicElement.size();
+  centroid.y() /= basicElement.size();
 
   // Get only the nearest lanelet to the centroid
   ConstLanelets nearestLanelets = localSubmap->laneletLayer.nearest(centroid, 1);
@@ -489,18 +497,24 @@ Optional<Id> findNearestIntersectingLanelet(const ConstLineString3d& lineString,
   if (!nearestLanelets.empty()) {
     const auto& ll = nearestLanelets.front();
 
-    // Get lanelet's 2D polygon using built-in function
-    CompoundHybridPolygon2d laneletPolygon = utils::to2D(utils::toHybrid(ll.polygon3d()));
+    // Get lanelet's 2D polygon
+    BasicPolygon2d laneletPolygon;
+    for (const auto& pt : ll.polygon3d()) {
+      laneletPolygon.push_back(BasicPoint2d(pt.x(), pt.y()));
+    }
 
     if (requireIntersection) {
       // Check if linestring intersects with lanelet polygon
-      if (geometry::intersects(ls2d, laneletPolygon)) {
+      if (boost::geometry::intersects(ls2d, laneletPolygon)) {
         return ll.id();
       }
     } else {
       // Check if distance to lanelet centerline is below threshold
-      ConstHybridLineString2d centerline2d = utils::to2D(utils::toHybrid(ll.centerline()));
-      double distance = geometry::distance(ls2d, centerline2d);
+      BasicLineString2d centerline2d;
+      for (const auto& pt : ll.centerline()) {
+        centerline2d.push_back(BasicPoint2d(pt.x(), pt.y()));
+      }
+      double distance = boost::geometry::distance(ls2d, centerline2d);
       if (distance <= maxDistance) {
         return ll.id();
       }
@@ -510,11 +524,11 @@ Optional<Id> findNearestIntersectingLanelet(const ConstLineString3d& lineString,
 }
 
 void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
-  for (const auto& lineString : localSubmap->lineStringLayer) {
-    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+  auto processElement = [&](const auto& element) {
+    Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == "stop_line") {
-      Id lsId = lineString.id();
-      BasicLineString3d lsBasic = lineString.basicLineString();
+      Id lsId = element.id();
+      BasicLineString3d lsBasic = element.basicLineString();
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
@@ -522,12 +536,12 @@ void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMa
         }
       }
 
-      TEType teType = teTypeToEnum(lineString);
+      TEType teType = teTypeToEnum(element);
       TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find associated lanelets via regulatory elements
-      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
+      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(element);
       for (const auto& regElem : regElemsOwningLs) {
         // Find lanelets that reference this regulatory element
         auto laneletsOwningRegelem = localSubmap->laneletLayer.findUsages(regElem);
@@ -536,15 +550,22 @@ void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMa
         }
       }
     }
+  };
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    processElement(lineString);
+  }
+  for (const auto& polygon : localSubmap->polygonLayer) {
+    processElement(polygon);
   }
 }
 
 void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
-  for (const auto& lineString : localSubmap->lineStringLayer) {
-    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+  auto processElement = [&](const auto& element) {
+    Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == "arrow") {
-      Id lsId = lineString.id();
-      BasicLineString3d lsBasic = lineString.basicLineString();
+      Id lsId = element.id();
+      BasicLineString3d lsBasic = element.basicLineString();
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
@@ -552,25 +573,32 @@ void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapEl
         }
       }
 
-      TEType teType = teTypeToEnum(lineString);
+      TEType teType = teTypeToEnum(element);
       TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find the nearest intersecting lanelet
-      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);
+      Optional<Id> laneletId = findNearestIntersectingLanelet(element, localSubmap);
       if (laneletId) {
         teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
       }
     }
+  };
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    processElement(lineString);
+  }
+  for (const auto& polygon : localSubmap->polygonLayer) {
+    processElement(polygon);
   }
 }
 
 void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
-  for (const auto& lineString : localSubmap->lineStringLayer) {
-    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+  auto processElement = [&](const auto& element) {
+    Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians") {
-      Id lsId = lineString.id();
-      BasicLineString3d lsBasic = lineString.basicLineString();
+      Id lsId = element.id();
+      BasicLineString3d lsBasic = element.basicLineString();
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
@@ -578,17 +606,17 @@ void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool igno
         }
       }
 
-      TEType teType = teTypeToEnum(lineString);
+      TEType teType = teTypeToEnum(element);
       TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find associated stop line via regulatory elements
-      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(lineString);
+      auto regElemsOwningLs = localSubmap->regulatoryElementLayer.findUsages(element);
       for (const auto& regElem : regElemsOwningLs) {
         // Check if this is a TrafficLight regulatory element
         if (regElem->attribute(AttributeName::Subtype).value() == "traffic_light") {
           // Get the stop line from the regulatory element using template syntax
-          auto stopLines = regElem->getParameters<ConstLineString3d>(RoleName::RefLine);
+          auto stopLines = regElem->template getParameters<ConstLineString3d>(RoleName::RefLine);
           if (!stopLines.empty()) {
             Id stopLineId = stopLines.front().id();
             // Check if this stop line is in our teInstances_ (already collected)
@@ -599,15 +627,22 @@ void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool igno
         }
       }
     }
+  };
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    processElement(lineString);
+  }
+  for (const auto& polygon : localSubmap->polygonLayer) {
+    processElement(polygon);
   }
 }
 
 void MapData::collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
-  for (const auto& lineString : localSubmap->lineStringLayer) {
-    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+  auto processElement = [&](const auto& element) {
+    Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == AttributeValueString::TrafficSign) {
-      Id lsId = lineString.id();
-      BasicLineString3d lsBasic = lineString.basicLineString();
+      Id lsId = element.id();
+      BasicLineString3d lsBasic = element.basicLineString();
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
@@ -615,19 +650,26 @@ void MapData::collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignor
         }
       }
 
-      TEType teType = teTypeToEnum(lineString);
+      TEType teType = teTypeToEnum(element);
       TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
     }
+  };
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    processElement(lineString);
+  }
+  for (const auto& polygon : localSubmap->polygonLayer) {
+    processElement(polygon);
   }
 }
 
 void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
-  for (const auto& lineString : localSubmap->lineStringLayer) {
-    Attribute type = lineString.attributeOr(AttributeName::Type, "");
+  auto processElement = [&](const auto& element) {
+    Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == "symbol") {
-      Id lsId = lineString.id();
-      BasicLineString3d lsBasic = lineString.basicLineString();
+      Id lsId = element.id();
+      BasicLineString3d lsBasic = element.basicLineString();
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
@@ -635,16 +677,23 @@ void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapE
         }
       }
 
-      TEType teType = teTypeToEnum(lineString);
+      TEType teType = teTypeToEnum(element);
       TEType representativeType = getTETypeRepresentative(teType, teTypeGrouping_);
       teInstances_.insert({lsId, std::make_shared<TEInstance>(lsBasic, lsId, representativeType)});
 
       // Find the nearest intersecting lanelet
-      Optional<Id> laneletId = findNearestIntersectingLanelet(lineString, localSubmap);
+      Optional<Id> laneletId = findNearestIntersectingLanelet(element, localSubmap);
       if (laneletId) {
         teEdges_[lsId].push_back(Edge(lsId, *laneletId, false));
       }
     }
+  };
+
+  for (const auto& lineString : localSubmap->lineStringLayer) {
+    processElement(lineString);
+  }
+  for (const auto& polygon : localSubmap->polygonLayer) {
+    processElement(polygon);
   }
 }
 
