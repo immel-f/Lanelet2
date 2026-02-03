@@ -892,6 +892,13 @@ void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
     if (previousLLs.empty()) {
       getPaths(localSubmapGraph, vehiclePaths, ll);
     }
+
+    if (!trafficRules->isOneWay(ll)) {
+      ConstLanelets previousLLs = localSubmapGraph->previous(ll.invert(), false);
+      if (previousLLs.empty()) {
+        getPaths(localSubmapGraph, vehiclePaths, ll.invert());
+      }
+    }
   }
 
   // Process bicycle routing graph if provided
