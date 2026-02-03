@@ -52,6 +52,10 @@ inline std::string lineStringTypeToString(LineStringType type) {
     return "PedestrianCrossing";
   else if (type == LineStringType::ZebraCrossing)
     return "ZebraCrossing";
+  else if (type == LineStringType::Building)
+    return "Building";
+  else if (type == LineStringType::Wall)
+    return "Wall";
   else {
     throw std::runtime_error("Unexpected Line String type!");
     return "Unknown";
@@ -82,6 +86,10 @@ inline LineStringType bdTypeToEnum(const T& element) {
     return LineStringType::ZebraCrossing;
   } else if (type == AttributeValueString::PedestrianMarking) {
     return LineStringType::PedestrianCrossing;
+  } else if (type == "building") {
+    return LineStringType::Building;
+  } else if (type == "wall") {
+    return LineStringType::Wall;
   }
 
   // Check subtype for lane marking types
@@ -144,6 +152,8 @@ inline TEType teTypeToEnum(const T& te) {
   if (type == "symbol") {
     if (subtype == "bicycle") {
       return TEType::BikeSymbol;
+    } else if (subtype == "bus") {
+      return TEType::BusSymbol;
     } else if (subtype == "30") {
       return TEType::Symbol30;
     } else if (subtype == "50") {

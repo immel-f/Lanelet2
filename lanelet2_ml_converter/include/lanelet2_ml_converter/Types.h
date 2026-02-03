@@ -32,6 +32,8 @@ enum class LineStringType {
   BikeMarkingDashed,
   BikeMarkingSolid,
   GuardRail,
+  Building,
+  Wall,
   PedestrianCrossing,
   ZebraCrossing,
 };
@@ -68,6 +70,7 @@ enum class TEType {
   ArrowGoStraightOrRight,
   ArrowGoStraightOrLeft,
   BikeSymbol,
+  BusSymbol,
   Symbol30,
   Symbol50,
   Symbol70,
@@ -119,6 +122,8 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
       {{LineStringType::GuardRail}, LineStringType::GuardRail},
       {{LineStringType::PedestrianCrossing}, LineStringType::PedestrianCrossing},
       {{LineStringType::ZebraCrossing}, LineStringType::ZebraCrossing},
+      {{LineStringType::Building}, LineStringType::Building},
+      {{LineStringType::Wall}, LineStringType::Wall},
   };
 }
 
@@ -126,7 +131,7 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
 inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
   return {
       {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
-        LineStringType::GuardRail},
+        LineStringType::GuardRail, LineStringType::Building, LineStringType::Wall},
        LineStringType::RoadBorder},
       {{LineStringType::Dashed}, LineStringType::Dashed},
       {{LineStringType::Solid}, LineStringType::Solid},
@@ -150,7 +155,7 @@ inline LineStringTypeGrouping getRoadBorderMergedGrouping() {
 inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
   return {
       {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
-        LineStringType::GuardRail},
+        LineStringType::GuardRail, LineStringType::Building, LineStringType::Wall},
        LineStringType::RoadBorder},
       {{LineStringType::Dashed, LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed,
         LineStringType::DashedSolid, LineStringType::BikeMarkingDashed, LineStringType::BikeMarkingSolid},
@@ -172,7 +177,7 @@ inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
 inline LineStringTypeGrouping getM3TRDefaultGrouping() {
   return {
       {{LineStringType::RoadBorder, LineStringType::Fence, LineStringType::CurbstoneHigh, LineStringType::CurbstoneLow,
-        LineStringType::GuardRail},
+        LineStringType::GuardRail, LineStringType::Building, LineStringType::Wall},
        LineStringType::RoadBorder},
       {{LineStringType::Dashed, LineStringType::BikeMarkingDashed}, LineStringType::Dashed},
       {{LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed, LineStringType::DashedSolid,
@@ -255,6 +260,7 @@ inline TETypeGrouping getDefaultTETypeGrouping() {
       {{TEType::ArrowGoStraightOrRight}, TEType::ArrowGoStraightOrRight},
       {{TEType::ArrowGoStraightOrLeft}, TEType::ArrowGoStraightOrLeft},
       {{TEType::BikeSymbol}, TEType::BikeSymbol},
+      {{TEType::BusSymbol}, TEType::BusSymbol},
       {{TEType::Symbol30}, TEType::Symbol30},
       {{TEType::Symbol50}, TEType::Symbol50},
       {{TEType::Symbol70}, TEType::Symbol70},

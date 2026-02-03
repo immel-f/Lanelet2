@@ -472,7 +472,7 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
 // Template helper to find nearest intersecting lanelet for both linestrings and polygons
 template <typename T>
 Optional<Id> findNearestIntersectingLanelet(const T& element, LaneletSubmapConstPtr& localSubmap,
-                                            bool requireIntersection = true, double maxDistance = 1.0) {
+                                            bool requireIntersection = true, double maxDistance = 2.0) {
   // Convert to BasicLineString3d - works for both ConstLineString3d and ConstPolygon3d
   BasicLineString3d basicElement = element.basicLineString();
 
@@ -492,31 +492,31 @@ Optional<Id> findNearestIntersectingLanelet(const T& element, LaneletSubmapConst
   centroid.y() /= basicElement.size();
 
   // Get only the nearest lanelet to the centroid
-  ConstLanelets nearestLanelets = localSubmap->laneletLayer.nearest(centroid, 1);
+  ConstLanelets nearestLanelets = localSubmap->laneletLayer.nearest(centroid, 5);
 
   if (!nearestLanelets.empty()) {
-    const auto& ll = nearestLanelets.front();
-
-    // Get lanelet's 2D polygon
-    BasicPolygon2d laneletPolygon;
-    for (const auto& pt : ll.polygon3d()) {
-      laneletPolygon.push_back(BasicPoint2d(pt.x(), pt.y()));
-    }
-
-    if (requireIntersection) {
-      // Check if linestring intersects with lanelet polygon
-      if (boost::geometry::intersects(ls2d, laneletPolygon)) {
-        return ll.id();
+    for (const auto& ll : nearestLanelets) {
+      // Get lanelet's 2D polygon
+      BasicPolygon2d laneletPolygon;
+      for (const auto& pt : ll.polygon3d()) {
+        laneletPolygon.push_back(BasicPoint2d(pt.x(), pt.y()));
       }
-    } else {
-      // Check if distance to lanelet centerline is below threshold
-      BasicLineString2d centerline2d;
-      for (const auto& pt : ll.centerline()) {
-        centerline2d.push_back(BasicPoint2d(pt.x(), pt.y()));
-      }
-      double distance = boost::geometry::distance(ls2d, centerline2d);
-      if (distance <= maxDistance) {
-        return ll.id();
+
+      if (requireIntersection) {
+        // Check if linestring intersects with lanelet polygon
+        if (boost::geometry::intersects(ls2d, laneletPolygon)) {
+          return ll.id();
+        }
+      } else {
+        // Check if distance to lanelet centerline is below threshold
+        BasicLineString2d centerline2d;
+        for (const auto& pt : ll.centerline()) {
+          centerline2d.push_back(BasicPoint2d(pt.x(), pt.y()));
+        }
+        double distance = boost::geometry::distance(ls2d, centerline2d);
+        if (distance <= maxDistance) {
+          return ll.id();
+        }
       }
     }
   }

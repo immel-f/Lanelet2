@@ -47,13 +47,13 @@ LStringProcessResult processLineStringImpl(const BasicLineString3d& lstring, con
 
   // If nPoints <= 0, skip resampling (only cut and transform)
   bool skipResampling = (nPoints <= 0);
-  
+
   for (const auto& line : cutLines) {
     result.cutInstances.push_back(line);
     // Always transform after cutting
     BasicLineString3d lineTransformed = transformLineString(bbox, line, pitch, roll);
     result.cutAndTransformedInstances.push_back(lineTransformed);
-    
+
     if (!skipResampling) {
       // Resample the already-transformed line
       BasicLineString3d lineResampled = resampleLineString(lineTransformed, nPoints);
@@ -81,9 +81,9 @@ bool LaneLineStringInstance::process(const OrientedRect& bbox, const Parametriza
 std::vector<VectorXd> LaneLineStringInstance::computeInstanceVectors(bool onlyPoints, bool pointsIn2d) const {
   std::vector<VectorXd> featVecs;
   // Use resampled if available, otherwise use transformed only
-  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
-                                      ? cutTransformedAndResampledInstances_ 
-                                      : cutAndTransformedInstances_;
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty()
+                                         ? cutTransformedAndResampledInstances_
+                                         : cutAndTransformedInstances_;
   for (const auto& split : source) {
     featVecs.push_back(toInstanceVector(split, typeInt(), onlyPoints, (pointsIn2d || processedFrom2d_)));
   }
@@ -114,9 +114,9 @@ std::vector<VectorXd> TEInstance::computeInstanceVectors(bool onlyPoints, bool p
 std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) const {
   std::vector<MatrixXd> pointMatrices;
   // Use resampled if available, otherwise use transformed only
-  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
-                                      ? cutTransformedAndResampledInstances_ 
-                                      : cutAndTransformedInstances_;
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty()
+                                         ? cutTransformedAndResampledInstances_
+                                         : cutAndTransformedInstances_;
   for (const auto& split : source) {
     pointMatrices.push_back(toPointMatrix(split, (pointsIn2d || processedFrom2d_)));
   }
@@ -125,15 +125,15 @@ std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) con
 
 std::vector<MatrixXd> TEInstance::pointMatrices(bool pointsIn2d) const {
   std::vector<MatrixXd> pointMatrices;
-  
+
   // Use resampled if available, otherwise use transformed only
-  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty() 
-                                      ? cutTransformedAndResampledInstances_ 
-                                      : cutAndTransformedInstances_;
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty()
+                                         ? cutTransformedAndResampledInstances_
+                                         : cutAndTransformedInstances_;
   for (const auto& split : source) {
     pointMatrices.push_back(toPointMatrix(split, (pointsIn2d || processedFrom2d_)));
   }
-  
+
   return pointMatrices;
 }
 
