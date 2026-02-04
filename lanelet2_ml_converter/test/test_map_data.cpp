@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <lanelet2_traffic_rules/TrafficRulesFactory.h>
-#include <matplot/matplot.h>
+// #include <matplot/matplot.h> // for plotting
 
 #include "lanelet2_ml_converter/MapData.h"
 #include "lanelet2_ml_converter/MapInstances.h"
