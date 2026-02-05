@@ -527,6 +527,11 @@ void MapData::collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMa
   auto processElement = [&](const auto& element) {
     Attribute type = element.attributeOr(AttributeName::Type, "");
     if (type == "stop_line") {
+      Attribute artificial = element.attributeOr("artificial", "");
+      if (artificial == 1) {
+        return;
+      }
+
       Id lsId = element.id();
       BasicLineString3d lsBasic = element.basicLineString();
 
