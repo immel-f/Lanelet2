@@ -115,6 +115,7 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
       {{LineStringType::DashedSolid}, LineStringType::DashedSolid},
       {{LineStringType::Virtual}, LineStringType::Virtual},
       {{LineStringType::Centerline}, LineStringType::Centerline},
+      {{LineStringType::BikeCenterline}, LineStringType::BikeCenterline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
       {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
