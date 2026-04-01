@@ -51,3 +51,23 @@ TEST_F(MLConverterTest, CutLineString) {  // NOLINT
   EXPECT_EQ(polylineCut[0].size(), 2);
   EXPECT_NEAR(polylineCut[0][1].x(), 15, 10e-5);
 }
+
+// Verify z-restoration for a vertical traffic element rectangle whose
+// corners share the same (x,y) but differ in z  (BL→TL→TR→BR).
+TEST_F(MLConverterTest, CutLineStringVerticalTE) {  // NOLINT
+  // A small rectangle entirely inside the bbox (x∈[-5,15], y∈[-10,20]).
+  // BL=(3,2,0), TL=(3,2,3), TR=(5,2,3), BR=(5,2,0)
+  BasicLineString3d rect{BasicPoint3d{3, 2, 0}, BasicPoint3d{3, 2, 3},
+                         BasicPoint3d{5, 2, 3}, BasicPoint3d{5, 2, 0}};
+  std::vector<BasicLineString3d> result = cutLineString(bbox, rect);
+
+  ASSERT_EQ(result.size(), 1);
+  ASSERT_EQ(result[0].size(), 4);
+
+  // Each clipped point must have the correct z restored via segment
+  // interpolation — in particular BL≠TL and BR≠TR despite sharing (x,y).
+  EXPECT_NEAR(result[0][0].z(), 0.0, 1e-6);  // BL
+  EXPECT_NEAR(result[0][1].z(), 3.0, 1e-6);  // TL
+  EXPECT_NEAR(result[0][2].z(), 3.0, 1e-6);  // TR
+  EXPECT_NEAR(result[0][3].z(), 0.0, 1e-6);  // BR
+}

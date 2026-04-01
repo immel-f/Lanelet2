@@ -130,27 +130,48 @@ std::vector<BasicLineString3d> cutLineString(const OrientedRect& bbox, const Bas
     // throw std::runtime_error("More than one cut line!");
   }
 
-  // restore z value from closest point on the original linestring
+  // Restore z from the nearest point on the original polyline.
+  // When several original vertices share the same (x,y) but differ in z
+  // (e.g. vertical traffic elements), we disambiguate by preserving the
+  // sequential order along the polyline: for each clipped point we search
+  // forward from the last matched position.
   for (const auto& el : cut2d) {
     BasicLineString3d ls;
-    double lastBestZ;
+    size_t searchStart = 0;
     for (const auto& pt2d : el) {
-      double lastDist = std::numeric_limits<double>::max();
-      double bestZ;
-      for (const auto& pt : polyline) {
-        double currDist = (pt2d - BasicPoint2d(pt.x(), pt.y())).norm();
-        if (currDist <= (lastDist + 1e-2)) {
-          lastDist = currDist;
-          if (abs(lastBestZ - pt.z()) > 1e-2) {
-            bestZ = pt.z();
-          }
+      // Find the nearest original vertex, searching forward from
+      // searchStart to preserve sequential order along the polyline.
+      if (searchStart >= polyline.size()) {
+        searchStart = polyline.size()-1;
+      }
+      double bestDist = std::numeric_limits<double>::max();
+      double bestZ = polyline[searchStart].z();
+      size_t bestIdx = searchStart;
+
+      // Primary: search from searchStart onward.
+      for (size_t i = searchStart; i < polyline.size(); ++i) {
+        double d = (pt2d - BasicPoint2d(polyline[i].x(), polyline[i].y())).norm();
+        if (d < bestDist) {
+          bestDist = d;
+          bestZ = polyline[i].z();
+          bestIdx = i;
         }
       }
-      if (abs(bestZ) < 1e-2) {
-        bestZ = lastBestZ;
+      // Fallback: if the clipped point is closer to an earlier vertex
+      // (e.g. a bbox boundary intersection), check those too.
+      for (size_t i = 0; i < searchStart; ++i) {
+        double d = (pt2d - BasicPoint2d(polyline[i].x(), polyline[i].y())).norm();
+        if (d < bestDist) {
+          bestDist = d;
+          bestZ = polyline[i].z();
+          bestIdx = i;
+        }
       }
+
       ls.push_back(BasicPoint3d(pt2d.x(), pt2d.y(), bestZ));
-      lastBestZ = bestZ;
+      // Advance past exact matches so the next clipped point will
+      // not re-use the same original vertex.
+      searchStart = (bestDist < 1e-3) ? bestIdx + 1 : bestIdx;
     }
     cut3d.push_back(ls);
   }
