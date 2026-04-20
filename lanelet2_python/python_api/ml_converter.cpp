@@ -517,6 +517,7 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   converters::convertVector<VectorXd>(true);
 
   converters::VectorToListConverter<std::vector<MatrixXd>>();
+  converters::VectorToListConverter<std::vector<VectorXd>>();
   converters::VectorToListConverter<BasicLineStrings3d>();
   converters::VectorToListConverter<LaneLineStringInstanceList>();
   converters::VectorToListConverter<CompoundLaneLineStringInstanceList>();

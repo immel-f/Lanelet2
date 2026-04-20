@@ -605,6 +605,18 @@ void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool igno
       Id lsId = element.id();
       BasicLineString3d lsBasic = element.basicLineString();
 
+      // Skip elements with elevation lower than -1000m (e.g., unlifted elements marked with FLOAT_MIN)
+      bool hasLowElevation = false;
+      for (const auto& pt : lsBasic) {
+        if (pt[2] < -1000.0) {
+          hasLowElevation = true;
+          break;
+        }
+      }
+      if (hasLowElevation) {
+        return;
+      }
+
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
           pt[2] = 0;
@@ -648,6 +660,18 @@ void MapData::collectTrafficSigns(LaneletSubmapConstPtr& localSubmap, bool ignor
     if (type == AttributeValueString::TrafficSign) {
       Id lsId = element.id();
       BasicLineString3d lsBasic = element.basicLineString();
+
+      // Skip elements with elevation lower than -1000m (e.g., unlifted elements marked with FLOAT_MIN)
+      bool hasLowElevation = false;
+      for (const auto& pt : lsBasic) {
+        if (pt[2] < -1000.0) {
+          hasLowElevation = true;
+          break;
+        }
+      }
+      if (hasLowElevation) {
+        return;
+      }
 
       if (ignoreMapElevation) {
         for (auto& pt : lsBasic) {
