@@ -1,5 +1,6 @@
 #include "lanelet2_ml_converter/MapData.h"
 
+#include <cmath>
 #include <iostream>
 
 #include "lanelet2_core/Attribute.h"
@@ -102,7 +103,8 @@ void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
     LaneLineStringInstancePtr leftBoundary = getLineStringFeatFromId(ll.leftBound().id(), ll.leftBound().inverted());
-    LaneLineStringInstancePtr rightBoundary = getLineStringFeatFromId(ll.rightBound().id(), ll.leftBound().inverted());
+    LaneLineStringInstancePtr rightBoundary =
+        getLineStringFeatFromId(ll.rightBound().id(), ll.rightBound().inverted());
     BasicLineString3d centerlineLString = ll.centerline3d().basicLineString();
     if (ignoreMapElevation) {
       for (auto& pt : centerlineLString) {
@@ -197,6 +199,12 @@ LaneLineStringInstancePtr makeInverted(const LaneLineStringInstancePtr& feat) {
       feat->laneletIDs(), !feat->inverted());
 }
 
+bool pointsMatchIn2d(const BasicPoint3d& p1, const BasicPoint3d& p2) {
+  constexpr double kPointMatchTolerance = 1e-2;
+  return std::abs(p1.x() - p2.x()) <= kPointMatchTolerance &&
+         std::abs(p1.y() - p2.y()) <= kPointMatchTolerance;
+}
+
 LaneLineStringInstancePtr MapData::getLineStringFeatFromId(Id id, bool inverted) {
   LaneLineStringInstances::iterator it = laneLineStrings_.find(id);
   if (it != laneLineStrings_.end()) {
@@ -286,6 +294,7 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
   // Collect all LineStrings from the map with drivable_space_border attribute
   std::vector<Id> drivableAreaIds;
   std::map<Id, std::pair<Id, Id>> endpointIdMap;  // Maps linestring ID to (first_point_id, last_point_id)
+  std::map<Id, std::pair<BasicPoint3d, BasicPoint3d>> endpointCoordMap;
 
   for (const auto& lineString : localSubmap->lineStringLayer) {
     Attribute drivableAreaBorder = lineString.attributeOr("drivable_space_border", "");
@@ -304,9 +313,38 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
       if (lineString.size() >= 2) {
         drivableAreaIds.push_back(lsId);
         endpointIdMap[lsId] = {lineString.front().id(), lineString.back().id()};
+        endpointCoordMap[lsId] = {BasicPoint3d(lineString.front().x(), lineString.front().y(), lineString.front().z()),
+                                  BasicPoint3d(lineString.back().x(), lineString.back().y(), lineString.back().z())};
       }
     }
   }
+
+  auto getDrivableAreaFeatureInEndpointDirection = [&](Id id, bool followEndpointOrder) {
+    LaneLineStringInstancePtr feature = getLineStringFeatFromId(id, false);
+    const auto& rawInstance = feature->rawInstance();
+    if (rawInstance.empty()) {
+      throw std::runtime_error("Drivable area feature " + std::to_string(id) + " has empty raw geometry!");
+    }
+
+    const auto endpointCoordIt = endpointCoordMap.find(id);
+    if (endpointCoordIt == endpointCoordMap.end()) {
+      throw std::runtime_error("Drivable area feature " + std::to_string(id) + " has no endpoint coordinates!");
+    }
+
+    const auto& expectedEndpoints = endpointCoordIt->second;
+    const bool sameDirection = pointsMatchIn2d(rawInstance.front(), expectedEndpoints.first) &&
+                               pointsMatchIn2d(rawInstance.back(), expectedEndpoints.second);
+    const bool reversedDirection = pointsMatchIn2d(rawInstance.front(), expectedEndpoints.second) &&
+                                   pointsMatchIn2d(rawInstance.back(), expectedEndpoints.first);
+
+    if (!sameDirection && !reversedDirection) {
+      throw std::runtime_error("Drivable area feature " + std::to_string(id) +
+                               " geometry does not match the source endpoints!");
+    }
+
+    LaneLineStringInstancePtr endpointAlignedFeature = sameDirection ? feature : makeInverted(feature);
+    return followEndpointOrder ? endpointAlignedFeature : makeInverted(endpointAlignedFeature);
+  };
 
   // Build adjacency list for connected components based on point IDs
   std::map<Id, std::vector<Id>> adjacency;
@@ -425,10 +463,10 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
       // If first endpoint is dangling, start from the second one; otherwise start from the first
       if (startFirstEndpointDangling && !startSecondEndpointDangling) {
         currentEndpoint = startEndpoints.second;
-        compoundFeatures.push_back(getLineStringFeatFromId(component[startIdx], false));
+        compoundFeatures.push_back(getDrivableAreaFeatureInEndpointDirection(component[startIdx], true));
       } else {
         currentEndpoint = startEndpoints.first;
-        compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[startIdx], false)));
+        compoundFeatures.push_back(getDrivableAreaFeatureInEndpointDirection(component[startIdx], false));
       }
 
       // Build the continuous chain
@@ -444,14 +482,14 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
           // Check if this linestring connects to current endpoint
           if (endpoints.first == currentEndpoint) {
             // Connects normally, no inversion needed
-            compoundFeatures.push_back(getLineStringFeatFromId(component[i], false));
+            compoundFeatures.push_back(getDrivableAreaFeatureInEndpointDirection(component[i], true));
             currentEndpoint = endpoints.second;
             usedIndices.insert(i);
             foundConnection = true;
             break;
           } else if (endpoints.second == currentEndpoint) {
             // Connects with inversion - manually invert the linestring
-            compoundFeatures.push_back(makeInverted(getLineStringFeatFromId(component[i], false)));
+            compoundFeatures.push_back(getDrivableAreaFeatureInEndpointDirection(component[i], false));
             currentEndpoint = endpoints.first;
             usedIndices.insert(i);
             foundConnection = true;

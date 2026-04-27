@@ -61,6 +61,7 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
 
   EXPECT_TRUE(mapData->laneletInstances().find(2007) != mapData->laneletInstances().end());
   EXPECT_EQ(mapData->laneletInstances().find(2007)->second->leftBoundary()->mapID(), 1012);
+  EXPECT_FALSE(mapData->laneletInstances().find(2007)->second->rightBoundary()->inverted());
   EXPECT_TRUE(mapData->lineStringsOfType(LineStringType::RoadBorder).find(1001) !=
               mapData->lineStringsOfType(LineStringType::RoadBorder).end());
 
@@ -73,6 +74,17 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
   EXPECT_EQ(mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea).size(), 1);
   auto assoDrivableAreaList = mapData->associatedCpdLineStringsOfType(1021, LineStringType::DrivableArea);
   CompoundLaneLineStringInstancePtr assoDrivableArea = assoDrivableAreaList.front();
+  for (const auto& compoundDrivableBorder : mapData->compoundLineStringsOfType(LineStringType::DrivableArea)) {
+    const auto& features = compoundDrivableBorder->features();
+    for (size_t i = 1; i < features.size(); ++i) {
+      const auto& previous = features[i - 1]->rawInstance();
+      const auto& current = features[i]->rawInstance();
+      ASSERT_FALSE(previous.empty());
+      ASSERT_FALSE(current.empty());
+      EXPECT_DOUBLE_EQ(previous.back().x(), current.front().x());
+      EXPECT_DOUBLE_EQ(previous.back().y(), current.front().y());
+    }
+  }
 
   // for (const auto& el : mapData->validCompoundLineStringsOfType(LineStringType::DrivableArea)) {
   //   for (const auto& feat : el->features()) {
