@@ -205,6 +205,30 @@ bool pointsMatchIn2d(const BasicPoint3d& p1, const BasicPoint3d& p2) {
          std::abs(p1.y() - p2.y()) <= kPointMatchTolerance;
 }
 
+double pointDistanceSquared2d(const BasicPoint3d& p1, const BasicPoint3d& p2) {
+  const double dx = p1.x() - p2.x();
+  const double dy = p1.y() - p2.y();
+  return dx * dx + dy * dy;
+}
+
+BasicLineString3d orientBorderForClosedPerimeter(const BasicLineString3d& firstBorder,
+                                                 const BasicLineString3d& secondBorder) {
+  if (firstBorder.empty() || secondBorder.empty()) {
+    return secondBorder;
+  }
+
+  // Pick the orientation whose endpoint pairings produce the shorter two closing edges.
+  const double asIsConnectionCost = pointDistanceSquared2d(firstBorder.back(), secondBorder.front()) +
+                                    pointDistanceSquared2d(secondBorder.back(), firstBorder.front());
+  const double reversedConnectionCost = pointDistanceSquared2d(firstBorder.back(), secondBorder.back()) +
+                                        pointDistanceSquared2d(secondBorder.front(), firstBorder.front());
+
+  if (asIsConnectionCost <= reversedConnectionCost) {
+    return secondBorder;
+  }
+  return BasicLineString3d(secondBorder.rbegin(), secondBorder.rend());
+}
+
 LaneLineStringInstancePtr MapData::getLineStringFeatFromId(Id id, bool inverted) {
   LaneLineStringInstances::iterator it = laneLineStrings_.find(id);
   if (it != laneLineStrings_.end()) {
@@ -639,7 +663,7 @@ void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapEl
 void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
   auto processElement = [&](const auto& element) {
     Attribute type = element.attributeOr(AttributeName::Type, "");
-    if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians") {
+    if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians" || type == "traffic_light_bikes") {
       Id lsId = element.id();
       BasicLineString3d lsBasic = element.basicLineString();
 
@@ -784,11 +808,12 @@ void MapData::collectPedestrianCrossings(LaneletSubmapConstPtr& localSubmap, boo
                   << std::endl;
       }
 
-      // Construct perimeter: left border + right border inverted + start point to close
+      // Construct perimeter: left border + endpoint-aligned right border + start point to close
       BasicLineString3d leftBorder = ll.leftBound3d().inverted() ? ll.leftBound3d().invert().basicLineString()
                                                                  : ll.leftBound3d().basicLineString();
       BasicLineString3d rightBorder = ll.rightBound3d().inverted() ? ll.rightBound3d().invert().basicLineString()
                                                                    : ll.rightBound3d().basicLineString();
+      BasicLineString3d orientedRightBorder = orientBorderForClosedPerimeter(leftBorder, rightBorder);
 
       // Build perimeter linestring
       BasicLineString3d perimeter;
@@ -798,9 +823,9 @@ void MapData::collectPedestrianCrossings(LaneletSubmapConstPtr& localSubmap, boo
         perimeter.push_back(ignoreMapElevation ? BasicPoint3d(pt.x(), pt.y(), 0) : pt);
       }
 
-      // Add right border points in reverse order (inverted)
-      for (auto it = rightBorder.rbegin(); it != rightBorder.rend(); ++it) {
-        perimeter.push_back(ignoreMapElevation ? BasicPoint3d(it->x(), it->y(), 0) : *it);
+      // Add right border points in the direction that closes the perimeter without crossing edges
+      for (const auto& pt : orientedRightBorder) {
+        perimeter.push_back(ignoreMapElevation ? BasicPoint3d(pt.x(), pt.y(), 0) : pt);
       }
 
       // Close the perimeter by adding the first point of left border again

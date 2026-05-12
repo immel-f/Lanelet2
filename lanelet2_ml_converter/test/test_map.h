@@ -281,6 +281,15 @@ class MapTestData {
     addLine(Points3d{points.at(69), points.at(70)});  // l1036
     lines.at(1036).setAttribute(AttributeName::Type, "arrow");
     lines.at(1036).setAttribute(AttributeName::Subtype, "straight_right");
+
+    // Zebra crossing lanelet with reversed right border geometry ordering
+    addLine(Points3d{points.at(33), points.at(32), points.at(31)});  // l1037
+    lines.at(1037).setAttribute(AttributeName::Type, AttributeValueString::Zebra);
+
+    Lanelet reversedCrosswalk{laneletId, lines.at(1030), lines.at(1037)};
+    reversedCrosswalk.setAttribute(AttributeName::Subtype, "crosswalk");
+    lanelets.insert(std::make_pair(laneletId, reversedCrosswalk));  // ll2019
+    laneletId++;
   }
   void initRegulatoryElements() {
     // Create TrafficLight regulatory element connecting traffic light to stop line

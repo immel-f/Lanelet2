@@ -11,6 +11,19 @@ using namespace lanelet;
 using namespace lanelet::ml_converter;
 using namespace lanelet::ml_converter::tests;
 
+namespace {
+
+void expectCrosswalkPerimeter(const BasicLineString3d& perimeter, const std::vector<BasicPoint3d>& expected) {
+  ASSERT_EQ(perimeter.size(), expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_DOUBLE_EQ(perimeter[i].x(), expected[i].x());
+    EXPECT_DOUBLE_EQ(perimeter[i].y(), expected[i].y());
+    EXPECT_DOUBLE_EQ(perimeter[i].z(), expected[i].z());
+  }
+}
+
+}  // namespace
+
 TEST_F(MLConverterTest, MapData) {  // NOLINT
 
   // std::cerr << std::endl << "--- IN MAP DATA TEST ---" << std::endl;
@@ -149,7 +162,7 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
   // Test pedestrian crossings
   std::vector<Eigen::MatrixXd> zebraCrossings =
       mapData->getTensorInstanceData(true, false).compoundLineStringsOfType(LineStringType::ZebraCrossing);
-  EXPECT_EQ(zebraCrossings.size(), 1);      // one zebra crossing
+  EXPECT_EQ(zebraCrossings.size(), 2);      // two zebra crossings
   EXPECT_EQ(zebraCrossings[0].rows(), 20);  // at least 20 points after resampling
   EXPECT_EQ(zebraCrossings[0].cols(), 2);   // 2D points
 
@@ -159,6 +172,18 @@ TEST_F(MLConverterTest, MapData) {  // NOLINT
       mapData->associatedCpdLineStringsOfType(2018, LineStringType::ZebraCrossing).front();
   EXPECT_EQ(assoCrossing->features().size(), 1);  // single compound feature
   EXPECT_EQ(assoCrossing->features().front()->laneletIDs().front(), 2018);
+
+  EXPECT_EQ(mapData->associatedCpdLineStringsOfType(2019, LineStringType::ZebraCrossing).size(), 1);
+  CompoundLaneLineStringInstancePtr reversedAssoCrossing =
+      mapData->associatedCpdLineStringsOfType(2019, LineStringType::ZebraCrossing).front();
+  EXPECT_EQ(reversedAssoCrossing->features().size(), 1);
+  EXPECT_EQ(reversedAssoCrossing->features().front()->laneletIDs().front(), 2019);
+
+  const std::vector<BasicPoint3d> expectedPerimeter{{5.0, -5.0, 1.0}, {7.0, -5.0, 1.0}, {9.0, -5.0, 1.0},
+                                                    {9.0, -7.0, 1.0}, {7.0, -7.0, 1.0}, {5.0, -7.0, 1.0},
+                                                    {5.0, -5.0, 1.0}};
+  expectCrosswalkPerimeter(assoCrossing->features().front()->rawInstance(), expectedPerimeter);
+  expectCrosswalkPerimeter(reversedAssoCrossing->features().front()->rawInstance(), expectedPerimeter);
 
   // Plotting is now done in MapDataTrafficElements test
 }
