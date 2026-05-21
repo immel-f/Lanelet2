@@ -169,7 +169,7 @@ inline TEType teTypeToEnum(const T& te) {
       return TEType::TLCar;
   } else if (type == "traffic_light_bikes") {
       return TEType::TLBike;
-  } else if (subtype == "traffic_light_pedestrians") {
+  } else if (type == "traffic_light_pedestrians") {
       return TEType::TLPedestrian;
   } else if (type == "traffic_light_misc") {
     return TEType::TLMisc;
