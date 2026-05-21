@@ -166,23 +166,13 @@ inline TEType teTypeToEnum(const T& te) {
 
   // Handle traffic lights
   if (type == AttributeValueString::TrafficLight) {
-    if (subtype == "red_yellow_green") {
       return TEType::TLCar;
-    } else if (subtype == "bike") {
+  } else if (type == "traffic_light_bikes") {
       return TEType::TLBike;
-    } else if (subtype == "pedestrian") {
+  } else if (subtype == "traffic_light_pedestrians") {
       return TEType::TLPedestrian;
-    }
-    return TEType::TLMisc;  // Default for unknown traffic light subtypes
-  }
-
-  if (type == "traffic_light_misc") {
+  } else if (type == "traffic_light_misc") {
     return TEType::TLMisc;
-  }
-
-  // Handle traffic light pedestrians as separate type
-  if (type == "traffic_light_pedestrians") {
-    return TEType::TLPedestrian;
   }
 
   // Handle traffic signs
