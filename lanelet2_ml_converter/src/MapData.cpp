@@ -17,6 +17,8 @@ MapDataPtr MapData::build(LaneletSubmapConstPtr& localSubmap, lanelet::routing::
                           traffic_rules::TrafficRulesPtr trafficRules,
                           lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation,
                           const LineStringTypeGrouping& lineStringTypeGrouping, const TETypeGrouping& teTypeGrouping) {
+  checkLineStringTypeGroupingCoverage(lineStringTypeGrouping);
+
   MapDataPtr data = std::make_shared<MapData>();
   data->lineStringTypeGrouping_ = lineStringTypeGrouping;
   data->teTypeGrouping_ = teTypeGrouping;
@@ -102,9 +104,15 @@ void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
                                    lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                    traffic_rules::TrafficRulesPtr trafficRules, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
+    Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
+    // Non-driving lanelets do not become lanelet instances
+    if (subtype == AttributeValueString::Crosswalk || subtype == AttributeValueString::Walkway ||
+        subtype == AttributeValueString::SharedWalkway || subtype == AttributeValueString::Stairs) {
+      continue;
+    }
+
     LaneLineStringInstancePtr leftBoundary = getLineStringFeatFromId(ll.leftBound().id(), ll.leftBound().inverted());
-    LaneLineStringInstancePtr rightBoundary =
-        getLineStringFeatFromId(ll.rightBound().id(), ll.rightBound().inverted());
+    LaneLineStringInstancePtr rightBoundary = getLineStringFeatFromId(ll.rightBound().id(), ll.rightBound().inverted());
     BasicLineString3d centerlineLString = ll.centerline3d().basicLineString();
     if (ignoreMapElevation) {
       for (auto& pt : centerlineLString) {
@@ -113,7 +121,6 @@ void MapData::initLaneletInstances(LaneletSubmapConstPtr& localSubmap,
     }
 
     // Determine if this is a bike lane based on subtype attribute
-    Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
     LineStringType centerlineType =
         (subtype == AttributeValueString::BicycleLane) ? LineStringType::BikeCenterline : LineStringType::Centerline;
 
@@ -201,8 +208,7 @@ LaneLineStringInstancePtr makeInverted(const LaneLineStringInstancePtr& feat) {
 
 bool pointsMatchIn2d(const BasicPoint3d& p1, const BasicPoint3d& p2) {
   constexpr double kPointMatchTolerance = 1e-2;
-  return std::abs(p1.x() - p2.x()) <= kPointMatchTolerance &&
-         std::abs(p1.y() - p2.y()) <= kPointMatchTolerance;
+  return std::abs(p1.x() - p2.x()) <= kPointMatchTolerance && std::abs(p1.y() - p2.y()) <= kPointMatchTolerance;
 }
 
 double pointDistanceSquared2d(const BasicPoint3d& p1, const BasicPoint3d& p2) {
@@ -314,7 +320,7 @@ CompoundLaneLineStringInstancePtr MapData::computeCompoundCenterline(const Const
   return std::make_shared<CompoundLaneLineStringInstance>(compoundCenterlines, centerlineType);
 }
 
-void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
+void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
   // Collect all LineStrings from the map with drivable_space_border attribute
   std::vector<Id> drivableAreaIds;
   std::map<Id, std::pair<Id, Id>> endpointIdMap;  // Maps linestring ID to (first_point_id, last_point_id)
@@ -325,6 +331,11 @@ void MapData::computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap) {
     if (drivableAreaBorder == "true") {
       Id lsId = lineString.id();
       BasicLineString3d lsBasic = lineString.basicLineString();
+      if (ignoreMapElevation) {
+        for (auto& pt : lsBasic) {
+          pt[2] = 0;
+        }
+      }
 
       // Add to laneLineStrings_ if not already present
       LaneLineStringInstances::iterator it = laneLineStrings_.find(lsId);
@@ -663,7 +674,8 @@ void MapData::collectArrows(LaneletSubmapConstPtr& localSubmap, bool ignoreMapEl
 void MapData::collectTrafficLights(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
   auto processElement = [&](const auto& element) {
     Attribute type = element.attributeOr(AttributeName::Type, "");
-    if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians" || type == "traffic_light_bikes") {
+    if (type == AttributeValueString::TrafficLight || type == "traffic_light_pedestrians" ||
+        type == "traffic_light_bikes") {
       Id lsId = element.id();
       BasicLineString3d lsBasic = element.basicLineString();
 
@@ -791,7 +803,7 @@ void MapData::collectSymbols(LaneletSubmapConstPtr& localSubmap, bool ignoreMapE
 void MapData::collectPedestrianCrossings(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation) {
   for (const auto& ll : localSubmap->laneletLayer) {
     Attribute subtype = ll.attributeOr(AttributeName::Subtype, "");
-    if (subtype == "crosswalk") {
+    if (subtype == AttributeValueString::Crosswalk) {
       // Determine the crossing type from borders (Zebra has precedence over PedestrianMarking)
       LineStringType leftType = bdTypeToEnum(ll.leftBound3d());
       LineStringType rightType = bdTypeToEnum(ll.rightBound3d());
@@ -895,83 +907,160 @@ void MapData::convertTEEdges() {
   }
 }
 
-std::map<Id, size_t>::const_iterator findFirstOccElement(const CompoundElsList& elsList,
-                                                         const std::map<Id, size_t>& searchMap) {
-  for (const auto& el : elsList.ids) {
-    std::map<Id, size_t>::const_iterator it = searchMap.find(el);
-    if (it != searchMap.end()) {
-      return it;
+/// @brief Removes the given elements from elsList and cuts what remains at the removal positions
+/// Every returned chain is contiguous again, so removing a run from the middle yields two chains rather than one
+/// with a gap in it. Returns an empty vector if every element was removed.
+std::vector<CompoundElsList> splitAtRemovedElements(const CompoundElsList& elsList,
+                                                    const std::vector<Id>& removedElements) {
+  std::vector<CompoundElsList> remaining;
+  std::vector<Id> runIds;
+  std::vector<bool> runInverted;
+
+  auto closeRun = [&]() {
+    if (!runIds.empty()) {
+      remaining.push_back(CompoundElsList(runIds, runInverted, elsList.type));
+      runIds.clear();
+      runInverted.clear();
+    }
+  };
+
+  for (size_t i = 0; i < elsList.ids.size(); i++) {
+    if (std::find(removedElements.begin(), removedElements.end(), elsList.ids[i]) != removedElements.end()) {
+      closeRun();
+    } else {
+      runIds.push_back(elsList.ids[i]);
+      runInverted.push_back(elsList.inverted[i]);
     }
   }
-  return searchMap.end();
+  closeRun();
+  return remaining;
 }
 
-bool hasElementNotInOther(const CompoundElsList& elsList1, const CompoundElsList& elsList2) {
-  for (const auto& el : elsList1.ids) {
-    if (std::find(elsList2.ids.begin(), elsList2.ids.end(), el) == elsList2.ids.end()) {
-      return true;
-    }
+/// @brief Deterministic order for candidate chains: longer chains first, chains of equal length by their elements
+bool isPreferredCandidate(const CompoundElsList& lhs, const CompoundElsList& rhs) {
+  if (lhs.ids.size() != rhs.ids.size()) {
+    return lhs.ids.size() > rhs.ids.size();
   }
-  return false;
+  return std::lexicographical_compare(lhs.ids.begin(), lhs.ids.end(), rhs.ids.begin(), rhs.ids.end());
 }
 
-void insertAndCheckNewCompoundInstances(std::vector<CompoundElsList>& compFeats,
-                                        const std::vector<CompoundElsList>& newCompFeats,
-                                        std::map<Id, size_t>& elInsertIdx) {
-  for (const auto& compEl : newCompFeats) {
-    std::map<Id, size_t>::const_iterator firstOccIt = findFirstOccElement(compEl, elInsertIdx);
-    if (firstOccIt == elInsertIdx.end()) {
-      compFeats.push_back(compEl);
-      for (const Id& el : compEl.ids) {
-        elInsertIdx[el] = compFeats.size() - 1;
-      }
-    } else if ((compFeats[firstOccIt->second].ids.size() < compEl.ids.size()) &&
-               compFeats[firstOccIt->second].type == compEl.type &&
-               !hasElementNotInOther(compFeats[firstOccIt->second], compEl)) {
-      compFeats[firstOccIt->second] = compEl;
-      for (const Id& el : compEl.ids) {
-        elInsertIdx[el] = firstOccIt->second;
-      }
-    } else if (compFeats[firstOccIt->second].type == compEl.type) {
-      std::vector<Id> leftoverIds;
-      std::vector<bool> leftoverInverted;
-      bool lastLeftover{false};
-      for (size_t i = 0; i < compEl.ids.size(); i++) {
-        if (!elInsertIdx.count(compEl.ids[i])) {
-          leftoverIds.push_back(compEl.ids[i]);
-          leftoverInverted.push_back(compEl.inverted[i]);
-          lastLeftover = true;
-        } else if (lastLeftover) {
-          CompoundElsList leftover(leftoverIds, leftoverInverted, compEl.type);
-          compFeats.push_back(leftover);
-          for (const Id& el : leftover.ids) {
-            elInsertIdx[el] = compFeats.size() - 1;
-          }
-          leftoverIds.clear();
-          leftoverInverted.clear();
-          lastLeftover = false;
-        }
-      }
-      if (lastLeftover) {
-        CompoundElsList leftover(leftoverIds, leftoverInverted, compEl.type);
-        compFeats.push_back(leftover);
-        for (const Id& el : leftover.ids) {
-          elInsertIdx[el] = compFeats.size() - 1;
-        }
-        leftoverIds.clear();
-        leftoverInverted.clear();
-        lastLeftover = false;
-      }
+bool coversSameElements(const CompoundElsList& elsList1, const CompoundElsList& elsList2) {
+  return std::set<Id>(elsList1.ids.begin(), elsList1.ids.end()) ==
+         std::set<Id>(elsList2.ids.begin(), elsList2.ids.end());
+}
+
+/// @brief Maps every element to the chain that currently holds it
+std::map<Id, size_t> indexChainElements(const std::vector<CompoundElsList>& chains) {
+  std::map<Id, size_t> chainOfElement;
+  for (size_t i = 0; i < chains.size(); i++) {
+    for (const Id& el : chains[i].ids) {
+      chainOfElement[el] = i;
     }
   }
+  return chainOfElement;
+}
+
+/// @brief Resolves candidate chains that all carry the same representative type into disjoint chains
+///
+/// The greedy pass keeps the longest candidates intact and lets the shorter ones contribute whatever is still
+/// free. The improvement pass afterwards adopts a candidate whenever emitting it as a whole removes more chains
+/// than its re-cut creates, which repairs the cases where the greedy order had to cut a candidate into
+/// fragments. The result depends only on the set of candidates, not on the order they come in.
+std::vector<CompoundElsList> resolveCandidatesOfSameType(std::vector<CompoundElsList> candidates) {
+  std::sort(candidates.begin(), candidates.end(), isPreferredCandidate);
+
+  std::vector<CompoundElsList> chains;
+  std::set<Id> claimed;
+  for (const CompoundElsList& candidate : candidates) {
+    std::vector<Id> alreadyClaimed;
+    for (const Id& el : candidate.ids) {
+      if (claimed.count(el) != 0) {
+        alreadyClaimed.push_back(el);
+      }
+    }
+    for (const CompoundElsList& chain : splitAtRemovedElements(candidate, alreadyClaimed)) {
+      claimed.insert(chain.ids.begin(), chain.ids.end());
+      chains.push_back(chain);
+    }
+  }
+
+  std::map<Id, size_t> chainOfElement = indexChainElements(chains);
+  while (true) {
+    int bestGain = 0;
+    size_t bestCandidate = candidates.size();
+    std::set<size_t> bestOverlapping;
+    std::vector<CompoundElsList> bestRemainder;
+
+    for (size_t c = 0; c < candidates.size(); c++) {
+      // the index yields the affected chains straight from the candidate's own elements, so the chains that
+      // have nothing in common with it are never looked at
+      std::set<size_t> overlapping;
+      for (const Id& el : candidates[c].ids) {
+        std::map<Id, size_t>::const_iterator it = chainOfElement.find(el);
+        if (it != chainOfElement.end()) {
+          overlapping.insert(it->second);
+        }
+      }
+      if (overlapping.empty() ||
+          (overlapping.size() == 1 && coversSameElements(chains[*overlapping.begin()], candidates[c]))) {
+        continue;  // nothing to gain, the candidate is already there
+      }
+
+      std::vector<CompoundElsList> remainder;
+      for (const size_t& i : overlapping) {
+        std::vector<CompoundElsList> rest = splitAtRemovedElements(chains[i], candidates[c].ids);
+        remainder.insert(remainder.end(), rest.begin(), rest.end());
+      }
+      // chains that the adoption removes, minus the candidate itself and the pieces its re-cut leaves behind
+      int gain = static_cast<int>(overlapping.size()) - 1 - static_cast<int>(remainder.size());
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestCandidate = c;
+        bestOverlapping = overlapping;
+        bestRemainder = remainder;
+      }
+    }
+    if (bestCandidate == candidates.size()) {
+      return chains;
+    }
+
+    std::vector<CompoundElsList> updated;
+    for (size_t i = 0; i < chains.size(); i++) {
+      if (bestOverlapping.count(i) == 0) {
+        updated.push_back(chains[i]);
+      }
+    }
+    updated.push_back(candidates[bestCandidate]);
+    updated.insert(updated.end(), bestRemainder.begin(), bestRemainder.end());
+    chains = updated;
+    chainOfElement = indexChainElements(chains);
+  }
+}
+
+/// @brief Turns the overlapping candidate chains of all lanelet paths into disjoint chains covering the same
+/// elements, using as few chains as possible
+///
+/// Every returned chain is a contiguous part of one candidate, so it stays traceable to a single lanelet path.
+/// Candidates of different representative types never share an element, so they are resolved independently.
+std::vector<CompoundElsList> resolveCompoundCandidates(std::vector<CompoundElsList> candidates) {
+  std::map<LineStringType, std::vector<CompoundElsList>> candidatesPerType;
+  for (const CompoundElsList& candidate : candidates) {
+    candidatesPerType[candidate.type].push_back(candidate);
+  }
+
+  std::vector<CompoundElsList> chains;
+  for (auto& typeAndCandidates : candidatesPerType) {
+    std::vector<CompoundElsList> resolved = resolveCandidatesOfSameType(typeAndCandidates.second);
+    chains.insert(chains.end(), resolved.begin(), resolved.end());
+  }
+  return chains;
 }
 
 void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
                                     lanelet::routing::RoutingGraphConstPtr localSubmapGraph,
                                     traffic_rules::TrafficRulesPtr trafficRules,
                                     lanelet::routing::RoutingGraphConstPtr bikeSubmapGraph, bool ignoreMapElevation) {
-  std::vector<CompoundElsList> compoundedBordersAndDividers;
-  std::map<Id, size_t> elInsertIdx;
+  std::vector<CompoundElsList> candidates;
 
   // Process vehicle routing graph
   std::vector<ConstLanelets> vehiclePaths;
@@ -1015,29 +1104,35 @@ void MapData::initCompoundInstances(LaneletSubmapConstPtr& localSubmap,
   allPaths.insert(allPaths.end(), vehiclePaths.begin(), vehiclePaths.end());
   allPaths.insert(allPaths.end(), bikePaths.begin(), bikePaths.end());
 
-  // Process borders from all paths together
+  // Collect the border chains of all paths first; which of the overlapping ones survive is decided afterwards,
+  // so that the result does not depend on the order in which the paths were enumerated
   for (const auto& path : allPaths) {
     std::vector<CompoundElsList> compoundedLeft = computeCompoundLeftBorders(path);
-    insertAndCheckNewCompoundInstances(compoundedBordersAndDividers, compoundedLeft, elInsertIdx);
+    candidates.insert(candidates.end(), compoundedLeft.begin(), compoundedLeft.end());
     std::vector<CompoundElsList> compoundedRight = computeCompoundRightBorders(path);
-    insertAndCheckNewCompoundInstances(compoundedBordersAndDividers, compoundedRight, elInsertIdx);
+    candidates.insert(candidates.end(), compoundedRight.begin(), compoundedRight.end());
     compoundLaneLineStrings_.push_back(computeCompoundCenterline(path, ignoreMapElevation));
   }
-  for (const auto& compFeat : compoundedBordersAndDividers) {
-    LaneLineStringInstanceList toBeCompounded;
+  for (const CompoundElsList& compFeat : resolveCompoundCandidates(candidates)) {
     if (compFeat.ids.size() != compFeat.inverted.size()) {
       throw std::runtime_error("Unequal sizes of ids and inverted!");
     }
+    if (compFeat.ids.empty()) {
+      continue;
+    }
+
+    LaneLineStringInstanceList toBeCompounded;
     for (size_t i = 0; i < compFeat.ids.size(); i++) {
       LaneLineStringInstancePtr cmpdFeat = getLineStringFeatFromId(compFeat.ids[i], compFeat.inverted[i]);
       toBeCompounded.push_back(cmpdFeat);
     }
-    LineStringType cmpdType = toBeCompounded.front()->type();
-    compoundLaneLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, cmpdType));
+    // the compound carries the representative type of its group, not the type of its first member -
+    // that is the whole point of the grouping (e.g. dashed + solid members become one Divider)
+    compoundLaneLineStrings_.push_back(std::make_shared<CompoundLaneLineStringInstance>(toBeCompounded, compFeat.type));
   }
 
   // Process drivable area borders
-  computeDrivableAreaBorders(localSubmap);
+  computeDrivableAreaBorders(localSubmap, ignoreMapElevation);
 }
 
 void MapData::updateAssociatedCpdInstanceIndices() {

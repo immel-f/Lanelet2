@@ -109,9 +109,9 @@ class MapData {
                           bool ignoreMapElevation = false,
                           const LineStringTypeGrouping& lineStringTypeGrouping = getDefaultLineStringTypeGrouping(),
                           const TETypeGrouping& teTypeGrouping = getDefaultTETypeGrouping());
-  bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType,
-                  bool resampleLanes = true, int32_t nPointsLanes = 0,
-                  bool resampleTE = true, int32_t nPointsTE = 0, double pitch = 0, double roll = 0);
+  bool processAll(const OrientedRect& bbox, const ParametrizationType& paramType, bool resampleLanes = true,
+                  int32_t nPointsLanes = 0, bool resampleTE = true, int32_t nPointsTE = 0, double pitch = 0,
+                  double roll = 0);
 
   LaneLineStringInstances lineStringsOfType(LineStringType type) const;
 
@@ -163,7 +163,7 @@ class MapData {
   std::vector<internal::CompoundElsList> computeCompoundRightBorders(const ConstLanelets& path);
   CompoundLaneLineStringInstancePtr computeCompoundCenterline(const ConstLanelets& path,
                                                               bool ignoreMapElevation = false);
-  void computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap);
+  void computeDrivableAreaBorders(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);
 
   // Collect non-lane traffic elements
   void collectStopLines(LaneletSubmapConstPtr& localSubmap, bool ignoreMapElevation = false);

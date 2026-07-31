@@ -431,9 +431,12 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
             .def("build", &MapData::build,
                  (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"),
                   arg("bikeSubmapGraph") = routing::RoutingGraphConstPtr(), arg("ignoreMapElevation") = false,
-                  arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping()))
+                  arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping(),
+                  arg("teTypeGrouping") = getDefaultTETypeGrouping()))
             .staticmethod("build")
-            .def("processAll", &MapData::processAll)
+            .def("processAll", &MapData::processAll,
+                 (arg("bbox"), arg("paramType"), arg("resampleLanes") = true, arg("nPointsLanes") = 0,
+                  arg("resampleTE") = true, arg("nPointsTE") = 0, arg("pitch") = 0, arg("roll") = 0))
             .def("lineStringsOfType", &MapData::lineStringsOfType, (arg("type")))
             .def("validLineStringsOfType", &MapData::validLineStringsOfType, (arg("type")))
             .def("compoundLineStringsOfType", &MapData::compoundLineStringsOfType, (arg("type")))

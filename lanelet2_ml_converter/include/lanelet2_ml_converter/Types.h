@@ -118,6 +118,7 @@ inline LineStringTypeGrouping getDefaultLineStringTypeGrouping() {
       {{LineStringType::BikeCenterline}, LineStringType::BikeCenterline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
+      {{LineStringType::Divider}, LineStringType::Divider},
       {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
       {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
       {{LineStringType::GuardRail}, LineStringType::GuardRail},
@@ -161,9 +162,6 @@ inline LineStringTypeGrouping getMapTRDefaultSimpleGrouping() {
       {{LineStringType::Dashed, LineStringType::Solid, LineStringType::SolidSolid, LineStringType::SolidDashed,
         LineStringType::DashedSolid, LineStringType::BikeMarkingDashed, LineStringType::BikeMarkingSolid},
        LineStringType::Divider},
-      {{LineStringType::CurbstoneHigh}, LineStringType::CurbstoneHigh},
-      {{LineStringType::CurbstoneLow}, LineStringType::CurbstoneLow},
-      {{LineStringType::Fence}, LineStringType::Fence},
       {{LineStringType::Virtual}, LineStringType::Virtual},
       {{LineStringType::Centerline}, LineStringType::Centerline},
       {{LineStringType::BikeCenterline}, LineStringType::BikeCenterline},
@@ -189,8 +187,6 @@ inline LineStringTypeGrouping getM3TRDefaultGrouping() {
       {{LineStringType::BikeCenterline}, LineStringType::BikeCenterline},
       {{LineStringType::Unknown}, LineStringType::Unknown},
       {{LineStringType::DrivableArea}, LineStringType::DrivableArea},
-      {{LineStringType::BikeMarkingDashed}, LineStringType::BikeMarkingDashed},
-      {{LineStringType::BikeMarkingSolid}, LineStringType::BikeMarkingSolid},
       {{LineStringType::PedestrianCrossing, LineStringType::ZebraCrossing}, LineStringType::PedestrianCrossing},
   };
 }

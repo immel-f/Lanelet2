@@ -48,6 +48,14 @@ inline std::string lineStringTypeToString(LineStringType type) {
     return "BikeCenterline";
   else if (type == LineStringType::Unknown)
     return "Unknown";
+  else if (type == LineStringType::Divider)
+    return "Divider";
+  else if (type == LineStringType::BikeMarkingDashed)
+    return "BikeMarkingDashed";
+  else if (type == LineStringType::BikeMarkingSolid)
+    return "BikeMarkingSolid";
+  else if (type == LineStringType::GuardRail)
+    return "GuardRail";
   else if (type == LineStringType::PedestrianCrossing)
     return "PedestrianCrossing";
   else if (type == LineStringType::ZebraCrossing)
@@ -80,15 +88,17 @@ inline LineStringType bdTypeToEnum(const T& element) {
     return LineStringType::CurbstoneHigh;
   } else if (type == AttributeValueString::Fence) {
     return LineStringType::Fence;
+  } else if (type == AttributeValueString::GuardRail) {
+    return LineStringType::GuardRail;
   } else if (type == AttributeValueString::Virtual) {
     return LineStringType::Virtual;
   } else if (type == AttributeValueString::Zebra) {
     return LineStringType::ZebraCrossing;
   } else if (type == AttributeValueString::PedestrianMarking) {
     return LineStringType::PedestrianCrossing;
-  } else if (type == "building") {
+  } else if (type == AttributeValueString::Building) {
     return LineStringType::Building;
-  } else if (type == "wall") {
+  } else if (type == AttributeValueString::Wall) {
     return LineStringType::Wall;
   }
 
@@ -117,6 +127,38 @@ inline LineStringType bdTypeToEnum(const ConstLineString3d& lString) {
 // Concrete overload for ConstPolygon3d (used by Python bindings)
 inline LineStringType bdTypeToEnumPolygon(const ConstPolygon3d& polygon) {
   return bdTypeToEnum<ConstPolygon3d>(polygon);
+}
+
+/// @brief The LineStringTypes a lanelet boundary can have, i.e. everything bdTypeToEnum can return
+/// Keep this in sync with bdTypeToEnum.
+inline std::vector<LineStringType> boundaryLineStringTypes() {
+  return {LineStringType::RoadBorder,    LineStringType::CurbstoneHigh,
+          LineStringType::CurbstoneLow,  LineStringType::Fence,
+          LineStringType::GuardRail,     LineStringType::Virtual,
+          LineStringType::ZebraCrossing, LineStringType::PedestrianCrossing,
+          LineStringType::Building,      LineStringType::Wall,
+          LineStringType::Dashed,        LineStringType::Solid,
+          LineStringType::SolidSolid,    LineStringType::SolidDashed,
+          LineStringType::DashedSolid,   LineStringType::Unknown};
+}
+
+/// @brief Throws unless the grouping assigns a group to every type a lanelet boundary can have
+/// Boundaries are chained into compound instances while their group index stays the same. Types that are in no
+/// group at all share the "not found" index, so leaving one out would let unrelated types be chained into a
+/// single compound instance and be labelled with whichever type happens to come first. Types that can never
+/// appear on a boundary (Divider, Centerline, ...) do not have to be grouped.
+inline void checkLineStringTypeGroupingCoverage(const LineStringTypeGrouping& grouping) {
+  std::string missingTypes;
+  for (const LineStringType& type : boundaryLineStringTypes()) {
+    if (getLineStringTypeGroupIndex(type, grouping) < 0) {
+      missingTypes =
+          missingTypes.empty() ? lineStringTypeToString(type) : missingTypes + ", " + lineStringTypeToString(type);
+    }
+  }
+  if (!missingTypes.empty()) {
+    throw std::runtime_error("LineStringTypeGrouping does not cover every type a lanelet boundary can have! " +
+                             std::string("Missing: ") + missingTypes);
+  }
 }
 
 // Template version that works with both ConstLineString3d and ConstPolygon3d
@@ -166,11 +208,11 @@ inline TEType teTypeToEnum(const T& te) {
 
   // Handle traffic lights
   if (type == AttributeValueString::TrafficLight) {
-      return TEType::TLCar;
+    return TEType::TLCar;
   } else if (type == "traffic_light_bikes") {
-      return TEType::TLBike;
+    return TEType::TLBike;
   } else if (type == "traffic_light_pedestrians") {
-      return TEType::TLPedestrian;
+    return TEType::TLPedestrian;
   } else if (type == "traffic_light_misc") {
     return TEType::TLMisc;
   }
@@ -179,7 +221,9 @@ inline TEType teTypeToEnum(const T& te) {
   if (type == AttributeValueString::TrafficSign) {
     // German traffic sign codes based on official StVO regulation
     // Regulatory signs (200-299)
-    if (subtype == "de205") {
+    if (subtype.value().find("de201") == 0) {  // de201-* (Andreaskreuz / crossbuck)
+      return TEType::TSCrossbuck;
+    } else if (subtype == "de205") {
       return TEType::TSYield;  // Yield sign
     } else if (subtype == "de206") {
       return TEType::TSStop;  // Stop sign

@@ -49,16 +49,25 @@ LStringProcessResult processLineStringImpl(const BasicLineString3d& lstring, con
   bool skipResampling = (nPoints <= 0);
 
   for (const auto& line : cutLines) {
-    result.cutInstances.push_back(line);
     // Always transform after cutting
     BasicLineString3d lineTransformed = transformLineString(bbox, line, pitch, roll);
-    result.cutAndTransformedInstances.push_back(lineTransformed);
 
     if (!skipResampling) {
       // Resample the already-transformed line
       BasicLineString3d lineResampled = resampleLineString(lineTransformed, nPoints);
+      if (lineResampled.empty()) {
+        // Piece too short to resample: drop it entirely instead of emitting an empty point matrix on an
+        // otherwise valid instance. The three lists stay index-aligned per surviving piece.
+        continue;
+      }
       result.cutTransformedAndResampledInstances.push_back(lineResampled);
     }
+    result.cutInstances.push_back(line);
+    result.cutAndTransformedInstances.push_back(lineTransformed);
+  }
+  if (result.cutInstances.empty()) {
+    result.wasCut_ = true;
+    result.valid_ = false;
   }
   return result;
 }
@@ -191,6 +200,7 @@ VectorXd stackVector(const std::vector<VectorXd>& vec) {
   size_t currIndex = 0;
   for (const auto& el : vec) {
     stacked.segment(currIndex, el.size()) = el;
+    currIndex = currIndex + el.size();
   }
   return stacked;
 }
@@ -204,7 +214,7 @@ std::vector<VectorXd> LaneletInstance::computeInstanceVectors(bool onlyPoints, b
     std::vector<VectorXd> featureVecs(vecCenterlinePts.size());
     for (size_t i = 0; i < vecCenterlinePts.size(); i++) {
       VectorXd vec(vecCenterlinePts[i].size() + 2);  // pts vec + left and right type
-      vec.segment(0, vecCenterlinePts.size()) = vecCenterlinePts[i];
+      vec.segment(0, vecCenterlinePts[i].size()) = vecCenterlinePts[i];
       vec[vec.size() - 2] = leftBoundary_->typeInt();
       vec[vec.size() - 1] = rightBoundary_->typeInt();
       featureVecs[i] = vec;

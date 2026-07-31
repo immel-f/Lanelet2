@@ -3,12 +3,14 @@
 #include <lanelet2_core/LaneletMap.h>
 #include <lanelet2_core/primitives/Lanelet.h>
 
+#include <algorithm>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
 #include <boost/filesystem.hpp>
 #include <fstream>
+#include <limits>
 
 namespace fs = boost::filesystem;
 namespace lanelet {
@@ -76,14 +78,16 @@ LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPo
   return submapPtr;
 }
 
-/// TODO: FURTHER INVESTIGATE THE WEIRD BEHAVIOR OF BOOST LINE_INTERPOLATE
 BasicLineString3d resampleLineString(const BasicLineString3d& polyline, int32_t nPoints) {
-  if (polyline.size() < 1) {
-    throw std::runtime_error("A polyline requires at least 2 points!");
+  if (polyline.empty()) {
+    throw std::runtime_error("An empty polyline cannot be resampled!");
+  }
+  if (nPoints < 2) {
+    throw std::runtime_error("Resampling a polyline requires at least 2 target points!");
   }
   double length = boost::geometry::length(polyline, boost::geometry::strategy::distance::pythagoras<double>());
   if (length < 1e-1) {
-    return BasicLineString3d();
+    return BasicLineString3d();  // degenerate (also covers single-point polylines)
   }
   double dist = length / static_cast<double>(nPoints - 1);  // to get all points of line
   boost::geometry::model::multi_point<BasicPoint3d> bdInterp;
@@ -142,7 +146,7 @@ std::vector<BasicLineString3d> cutLineString(const OrientedRect& bbox, const Bas
       // Find the nearest original vertex, searching forward from
       // searchStart to preserve sequential order along the polyline.
       if (searchStart >= polyline.size()) {
-        searchStart = polyline.size()-1;
+        searchStart = polyline.size() - 1;
       }
       double bestDist = std::numeric_limits<double>::max();
       double bestZ = polyline[searchStart].z();
@@ -259,7 +263,7 @@ void saveMapDataMultiFile(const std::string& path, const std::vector<std::string
         throw std::runtime_error("Failed to open archive " + filename);
       }
       boost::archive::binary_oarchive oa(fs);
-      oa << mDataVec;
+      oa << mData;
     } else {
       std::ofstream fs(path + filename);
       if (!fs.good()) {

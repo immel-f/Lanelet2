@@ -24,6 +24,7 @@ class MapTestData {
     initLineStrings();
     initLanelets();
     initTrafficElements();
+    initTrafficSigns();
     initRegulatoryElements();
     laneletMap = std::make_shared<LaneletMap>(lanelets, areas, regulatoryElements, std::unordered_map<Id, Polygon3d>(),
                                               lines, points);
@@ -290,6 +291,37 @@ class MapTestData {
     reversedCrosswalk.setAttribute(AttributeName::Subtype, "crosswalk");
     lanelets.insert(std::make_pair(laneletId, reversedCrosswalk));  // ll2019
     laneletId++;
+  }
+  /// Traffic signs are vertical linestrings (constant x/y, differing z), like in real maps.
+  /// All of them lie inside the test bbox (x in [-5, 15], y in [-10, 20]) so that processAll() stays valid.
+  void initTrafficSigns() {
+    // Stop sign (StVO 206) next to lanelet 2003
+    addPoint(3.0, -4.5, 2.0);                         // p71
+    addPoint(3.0, -4.5, 2.6);                         // p72
+    addLine(Points3d{points.at(71), points.at(72)});  // l1038
+    lines.at(1038).setAttribute(AttributeName::Type, AttributeValueString::TrafficSign);
+    lines.at(1038).setAttribute(AttributeName::Subtype, "de206");
+
+    // Speed limit sign (StVO 274-50), exercises the de274 prefix match
+    addPoint(12.0, -6.0, 2.0);                        // p73
+    addPoint(12.0, -6.0, 2.6);                        // p74
+    addLine(Points3d{points.at(73), points.at(74)});  // l1039
+    lines.at(1039).setAttribute(AttributeName::Type, AttributeValueString::TrafficSign);
+    lines.at(1039).setAttribute(AttributeName::Subtype, "de274-50");
+
+    // Crossbuck (StVO 201-50), exercises the de201 prefix match
+    addPoint(1.0, -6.0, 2.0);                         // p75
+    addPoint(1.0, -6.0, 2.6);                         // p76
+    addLine(Points3d{points.at(75), points.at(76)});  // l1040
+    lines.at(1040).setAttribute(AttributeName::Type, AttributeValueString::TrafficSign);
+    lines.at(1040).setAttribute(AttributeName::Subtype, "de201-50");
+
+    // Unrecognized subtype, falls back to TSMisc
+    addPoint(13.0, 3.0, 2.0);                         // p77
+    addPoint(13.0, 3.0, 2.6);                         // p78
+    addLine(Points3d{points.at(77), points.at(78)});  // l1041
+    lines.at(1041).setAttribute(AttributeName::Type, AttributeValueString::TrafficSign);
+    lines.at(1041).setAttribute(AttributeName::Subtype, "de999");
   }
   void initRegulatoryElements() {
     // Create TrafficLight regulatory element connecting traffic light to stop line

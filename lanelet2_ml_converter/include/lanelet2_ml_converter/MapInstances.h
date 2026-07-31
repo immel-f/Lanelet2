@@ -217,10 +217,12 @@ MatrixXd getInstanceVectorMatrix(const std::vector<std::shared_ptr<T>>& mapInsta
     std::vector<VectorXd> individualVecs = feat->computeInstanceVectors(onlyPoints, pointsIn2d);
     featureVectors.insert(featureVectors.end(), individualVecs.begin(), individualVecs.end());
   }
-  if (std::adjacent_find(featureVectors.begin(), featureVectors.end(),
-                         [](const VectorXd& v1, const VectorXd& v2) { return v1.size() != v2.size(); }) ==
-          featureVectors.end() &&
-      featureVectors.size() > 1) {
+  if (featureVectors.empty()) {
+    throw std::runtime_error("No feature vectors to build a matrix from!");
+  }
+  if (std::adjacent_find(featureVectors.begin(), featureVectors.end(), [](const VectorXd& v1, const VectorXd& v2) {
+        return v1.size() != v2.size();
+      }) != featureVectors.end()) {
     throw std::runtime_error(
         "Unequal length of feature vectors! To create a matrix all feature vectors must have the same length!");
   }
