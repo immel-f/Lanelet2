@@ -13,12 +13,28 @@
 namespace lanelet {
 namespace ml_converter {
 
+/// @brief Build the local reference frame around a pose
+/// @param center Origin of the local reference frame in the map frame
+/// @param extentLongitudinal Half extent [m] in driving direction, i.e. the rectangle reaches this far to the
+/// front and to the rear of center
+/// @param extentLateral Half extent [m] in lateral direction, i.e. this far to the left and to the right
+/// @param yaw Heading of the local reference frame in the map frame [rad], counter clockwise from the x axis
+/// @param from2dPos Whether the pose this is built from is 2d, see OrientedRect::from2d
 OrientedRect getRotatedRect(const BasicPoint3d& center, double extentLongitudinal, double extentLateral, double yaw,
                             bool from2dPos);
 
+/// @brief Extract the part of the map around a position
+/// @param center Center of the region to extract, in the map frame
+/// @param extentLongitudinal Half extent [m] in driving direction, see getRotatedRect()
+/// @param extentLateral Half extent [m] in lateral direction, see getRotatedRect()
+/// @return A submap holding the lanelets, line strings, polygons and regulatory elements of the region
+/// @note The search region is axis aligned and slightly larger than the rectangle of getRotatedRect(), so that
+/// it contains the rotated rectangle for any yaw angle. The final crop happens when instances are processed
 LaneletSubmapConstPtr extractSubmap(LaneletMapConstPtr laneletMap, const BasicPoint2d& center,
                                     double extentLongitudinal, double extentLateral);
 
+/// @brief Get the name of a LineStringType
+/// @throw std::runtime_error if the type is unknown
 inline std::string lineStringTypeToString(LineStringType type) {
   if (type == LineStringType::RoadBorder)
     return "RoadBorder";
@@ -70,7 +86,12 @@ inline std::string lineStringTypeToString(LineStringType type) {
   }
 }
 
-// Template version that works with both ConstLineString3d and ConstPolygon3d
+/// @brief Get the LineStringType of a lanelet boundary from its tagging
+/// The `type` tag takes precedence over the `subtype` tag, which is only consulted for lane markings.
+/// Works with both ConstLineString3d and ConstPolygon3d.
+/// @return The type, LineStringType::Unknown if no tag matches
+/// @note Road borders are only recognized if they are tagged as such - an untagged road border is
+/// indistinguishable from a lane divider and will be treated as one
 template <typename T>
 inline LineStringType bdTypeToEnum(const T& element) {
   Attribute type = element.attributeOr(AttributeName::Type, "");
@@ -119,12 +140,12 @@ inline LineStringType bdTypeToEnum(const T& element) {
   return LineStringType::Unknown;
 }
 
-// Concrete overload for ConstLineString3d (used by Python bindings)
+//! Concrete overload of bdTypeToEnum() for ConstLineString3d (used by Python bindings)
 inline LineStringType bdTypeToEnum(const ConstLineString3d& lString) {
   return bdTypeToEnum<ConstLineString3d>(lString);
 }
 
-// Concrete overload for ConstPolygon3d (used by Python bindings)
+//! Concrete overload of bdTypeToEnum() for ConstPolygon3d (used by Python bindings)
 inline LineStringType bdTypeToEnumPolygon(const ConstPolygon3d& polygon) {
   return bdTypeToEnum<ConstPolygon3d>(polygon);
 }
@@ -161,7 +182,11 @@ inline void checkLineStringTypeGroupingCoverage(const LineStringTypeGrouping& gr
   }
 }
 
-// Template version that works with both ConstLineString3d and ConstPolygon3d
+/// @brief Get the TEType of a traffic element from its tagging
+/// Recognizes stop lines, arrow and symbol road markings, traffic lights and traffic signs. Traffic signs are
+/// mapped from their German StVO code in the `subtype` tag, unknown codes become TEType::TSMisc.
+/// Works with both ConstLineString3d and ConstPolygon3d.
+/// @return The type, TEType::Unknown if no tag matches
 template <typename T>
 inline TEType teTypeToEnum(const T& te) {
   Attribute type = te.attributeOr(AttributeName::Type, "");
@@ -272,30 +297,53 @@ inline TEType teTypeToEnum(const T& te) {
   return TEType::Unknown;
 }
 
-// Concrete overload for ConstLineString3d (used by Python bindings)
+//! Concrete overload of teTypeToEnum() for ConstLineString3d (used by Python bindings)
 inline TEType teTypeToEnum(const ConstLineString3d& te) { return teTypeToEnum<ConstLineString3d>(te); }
 
-// Concrete overload for ConstPolygon3d (used by Python bindings)
+//! Concrete overload of teTypeToEnum() for ConstPolygon3d (used by Python bindings)
 inline TEType teTypeToEnumPolygon(const ConstPolygon3d& te) { return teTypeToEnum<ConstPolygon3d>(te); }
 
+/// @brief Resample a polyline to a fixed number of equidistant points
+/// @param nPoints Number of points of the result, first and last point of the polyline are kept
+/// @return The resampled polyline, empty if the polyline is degenerate (shorter than 0.1 m)
+/// @throw std::runtime_error if the polyline is empty or if nPoints is smaller than 2
 BasicLineString3d resampleLineString(const BasicLineString3d& polyline, int32_t nPoints);
 
+/// @brief Clip a polyline to the local reference frame
+/// @return The parts of the polyline inside of the rectangle, empty if it lies completely outside. A polyline
+/// that leaves and re-enters the rectangle results in more than one part
+/// @note Clipping happens in 2d. The z coordinate of the clipped points is restored from the nearest point of
+/// the original polyline, searching along it so that elements with several points above each other (e.g.
+/// traffic signs) keep their elevation
 std::vector<BasicLineString3d> cutLineString(const OrientedRect& bbox, const BasicLineString3d& polyline);
 
+/// @brief Transform a polyline from the map frame into the local reference frame given by bbox
+/// @param pitch Pitch angle of the local reference frame [rad]
+/// @param roll Roll angle of the local reference frame [rad]
+/// @note The rotation is applied as yaw, then pitch, then roll, with the yaw angle taken from the bounding box
 BasicLineString3d transformLineString(const OrientedRect& bbox, const BasicLineString3d& polyline, double pitch,
                                       double roll);
 
-void saveMapData(const std::string& filename, const std::vector<MapDataPtr>& mDataVec,
-                 bool binary);  // saves all in one file
+/// @brief Save map data objects, all of them in one file
+/// @param binary If true, a boost binary archive is written, otherwise a human readable XML archive
+/// @throw std::runtime_error if the file cannot be opened
+void saveMapData(const std::string& filename, const std::vector<MapDataPtr>& mDataVec, bool binary);
 
-std::vector<MapDataPtr> loadMapData(const std::string& filename, bool binary);  // loads entire vector from one file
+/// @brief Load the map data objects that saveMapData() wrote into one file
+/// @throw std::runtime_error if the file does not exist or cannot be opened
+std::vector<MapDataPtr> loadMapData(const std::string& filename, bool binary);
 
+/// @brief Save map data objects, one file per MapData object
+/// @param path Directory the files are written to, is prepended to the file names as it is
+/// @param filenames One file name per map data object, must have the same size as mDataVec
+/// @throw std::runtime_error if the sizes do not match or if a file cannot be opened
 void saveMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                          const std::vector<MapDataPtr>& mDataVec,
-                          bool binary);  // saves in one file per LaneData
+                          const std::vector<MapDataPtr>& mDataVec, bool binary);
 
+/// @brief Load the map data objects that saveMapDataMultiFile() wrote into one file each
+/// @throw std::runtime_error if one of the files does not exist or cannot be opened
 std::vector<MapDataPtr> loadMapDataMultiFile(const std::string& path, const std::vector<std::string>& filenames,
-                                             bool binary);  // loads from one file per LaneData
+                                             bool binary);
 
 }  // namespace ml_converter
 }  // namespace lanelet

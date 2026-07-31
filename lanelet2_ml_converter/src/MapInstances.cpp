@@ -100,24 +100,16 @@ std::vector<VectorXd> LaneLineStringInstance::computeInstanceVectors(bool onlyPo
 }
 
 std::vector<VectorXd> TEInstance::computeInstanceVectors(bool onlyPoints, bool pointsIn2d) const {
-  VectorXd vec = (pointsIn2d || processedFrom2d_)
-                     ? VectorXd(2 * rawInstance_.size() + 1)
-                     : VectorXd(3 * rawInstance_.size() + 1);  // n points with 2/3 dims + type
-  if (pointsIn2d == true) {
-    for (size_t i = 0; i < rawInstance_.size(); i++) {
-      vec.segment(2 * i, 2) = rawInstance_[i].segment(0, 2);
-    }
-  } else {
-    for (size_t i = 0; i < rawInstance_.size(); i++) {
-      vec.segment(3 * i, 3) = rawInstance_[i].segment(0, 3);
-    }
+  std::vector<VectorXd> featVecs;
+  // Use resampled if available, otherwise use transformed only
+  const BasicLineStrings3d& source = !cutTransformedAndResampledInstances_.empty()
+                                         ? cutTransformedAndResampledInstances_
+                                         : cutAndTransformedInstances_;
+  for (const auto& split : source) {
+    featVecs.push_back(
+        toInstanceVector(split, static_cast<int>(teType_), onlyPoints, (pointsIn2d || processedFrom2d_)));
   }
-  vec[vec.size() - 1] = static_cast<int>(teType_);
-  if (onlyPoints) {
-    return std::vector<VectorXd>{vec.segment(0, vec.size() - 1)};
-  } else {
-    return std::vector<VectorXd>{vec};
-  }
+  return featVecs;
 }
 
 std::vector<MatrixXd> LaneLineStringInstance::pointMatrices(bool pointsIn2d) const {

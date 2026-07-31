@@ -11,8 +11,31 @@
 namespace lanelet {
 namespace ml_converter {
 
-enum class LaneletRepresentationType { Centerline, Boundaries };
-enum class ParametrizationType { Bezier, BezierEndpointFixed, LineString };
+/// @brief How a LaneletInstance is laid out in its instance vector
+enum class LaneletRepresentationType {
+  Centerline,  //!< centerline points, followed by the type of the left and the right boundary
+  Boundaries   //!< left boundary points, right boundary points, followed by both types
+};
+
+/// @brief How the geometry of an instance is parametrized
+/// @note Only LineString is implemented, the others throw when passed to process()
+enum class ParametrizationType {
+  Bezier,               //!< not implemented
+  BezierEndpointFixed,  //!< not implemented
+  LineString            //!< polyline, i.e. the points as they are
+};
+
+/**
+ * @brief Type of a lane line string instance
+ *
+ * Most values are derived from the tagging of a lanelet boundary, see bdTypeToEnum(). The following ones are
+ * not:
+ * - Centerline and BikeCenterline: computed centerlines of lanelets and compound lanelet paths
+ * - DrivableArea: the extent of the physically drivable space. Comes from line strings tagged
+ *   `drivable_space_border`, which are not lanelet boundaries and are stated independently of how the lane
+ *   boundaries are tagged, see MapData::computeDrivableAreaBorders()
+ * - Divider: only ever appears as the representative type of a grouping that merges lane markings
+ */
 enum class LineStringType {
   RoadBorder,
   Dashed,
@@ -38,7 +61,12 @@ enum class LineStringType {
   ZebraCrossing,
 };
 
-// TL = Traffic Light, TS = Traffic Sign
+/**
+ * @brief Type of a traffic element instance
+ *
+ * Prefixes: TL = traffic light, TS = traffic sign. The remaining values are road surface markings (arrows,
+ * symbols) and stop lines. Traffic signs are mapped from their German StVO codes, see teTypeToEnum().
+ */
 enum class TEType {
   TLCar,
   TLBike,
@@ -78,12 +106,29 @@ enum class TEType {
   Unknown
 };
 
+/**
+ * @brief The local reference frame: an axis aligned rectangle rotated by a yaw angle
+ *
+ * Everything outside of this rectangle is cut away when instances are processed, and the surviving geometry is
+ * expressed relative to its center and yaw angle.
+ *
+ * @note Cannot be constructed directly, use getRotatedRect() to obtain one.
+ */
 struct OrientedRect {
-  BasicPoint3d center;
-  double yaw;
+  BasicPoint3d center;  //!< center of the rectangle in the map frame
+  double yaw;           //!< heading of the rectangle in the map frame [rad]
+
+  /// @brief Whether this rectangle was built from a 2d pose
+  /// If true, the z coordinate of center is meaningless and all instance output is forced to be 2d, no matter
+  /// what was passed as pointsIn2d.
   bool from2d{false};
-  boost::geometry::model::polygon<BasicPoint2d> bg_poly;
+
+  boost::geometry::model::polygon<BasicPoint2d> bg_poly;  //!< the rectangle in the map frame, used for clipping
+
+  //! The corner points of the rectangle in the map frame
   boost::geometry::model::polygon<BasicPoint2d>::ring_type& bounds() { return bg_poly.outer(); }
+
+  //! The corner points of the rectangle in the map frame
   const boost::geometry::model::polygon<BasicPoint2d>::ring_type& bounds_const() { return bg_poly.outer(); }
 
   friend OrientedRect getRotatedRect(const BasicPoint3d& center, double extentLongitudinal, double extentLateral,
@@ -93,12 +138,30 @@ struct OrientedRect {
   OrientedRect() noexcept {}
 };
 
-/// @brief Type grouping for compound instances: maps lists of LineStringTypes to a representative LineStringType
-/// Each pair contains a vector of LineStringTypes that map to a representative LineStringType
+/**
+ * @brief Type grouping for compound instances: maps lists of LineStringTypes to a representative LineStringType
+ *
+ * Each pair contains a vector of LineStringTypes that map to a representative LineStringType. A grouping does
+ * two things at once:
+ * 1. it decides which boundaries are chained into one compound instance - consecutive boundaries are chained as
+ *    long as they stay within the same group
+ * 2. it decides the label of the result - a compound instance carries the representative type of its group
+ *
+ * This is how the label set is adapted to what a model is supposed to predict, e.g. getM3TRDefaultGrouping()
+ * reproduces the label set of M3TR. Use getDefaultLineStringTypeGrouping() to keep every type separate.
+ *
+ * @note A grouping must assign a group to every type a lanelet boundary can have, otherwise unrelated types
+ * would end up chained together, see checkLineStringTypeGroupingCoverage().
+ */
 using LineStringTypeGrouping = std::vector<std::pair<std::vector<LineStringType>, LineStringType>>;
 
-/// @brief Type grouping for traffic elements: maps lists of TETypes to a representative TEType
-/// Each pair contains a vector of TETypes that map to a representative TEType
+/**
+ * @brief Type grouping for traffic elements: maps lists of TETypes to a representative TEType
+ *
+ * Each pair contains a vector of TETypes that map to a representative TEType. Unlike a LineStringTypeGrouping
+ * this only relabels: traffic elements are never chained, so a grouping merely decides which types collapse
+ * into one label. Types that are in no group keep their own type.
+ */
 using TETypeGrouping = std::vector<std::pair<std::vector<TEType>, TEType>>;
 
 /// @brief Get the default LineStringTypeGrouping where each type has its own group

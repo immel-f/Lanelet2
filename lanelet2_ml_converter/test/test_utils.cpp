@@ -57,8 +57,7 @@ TEST_F(MLConverterTest, CutLineString) {  // NOLINT
 TEST_F(MLConverterTest, CutLineStringVerticalTE) {  // NOLINT
   // A small rectangle entirely inside the bbox (x∈[-5,15], y∈[-10,20]).
   // BL=(3,2,0), TL=(3,2,3), TR=(5,2,3), BR=(5,2,0)
-  BasicLineString3d rect{BasicPoint3d{3, 2, 0}, BasicPoint3d{3, 2, 3},
-                         BasicPoint3d{5, 2, 3}, BasicPoint3d{5, 2, 0}};
+  BasicLineString3d rect{BasicPoint3d{3, 2, 0}, BasicPoint3d{3, 2, 3}, BasicPoint3d{5, 2, 3}, BasicPoint3d{5, 2, 0}};
   std::vector<BasicLineString3d> result = cutLineString(bbox, rect);
 
   ASSERT_EQ(result.size(), 1);

@@ -1,5 +1,16 @@
 #pragma once
 
+/**
+ * @file
+ * @brief Boost serialization support for all types of the module
+ *
+ * Including this header is what makes saveMapData() and loadMapData() work. Both a binary and a human readable
+ * XML archive format are supported, see saveMapData().
+ *
+ * @note The archives are not versioned, so data written by one version of the module can only be read back by
+ * a version whose types still have the same members.
+ */
+
 #include <boost/serialization/level.hpp>
 #include <boost/serialization/map.hpp>
 #include <boost/serialization/optional.hpp>

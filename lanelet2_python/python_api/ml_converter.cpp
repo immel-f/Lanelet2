@@ -273,7 +273,10 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   typedef std::vector<std::pair<std::vector<LineStringType>, LineStringType>> LineStringTypeGrouping;
   class_<LineStringTypeGrouping>(
       "LineStringTypeGrouping",
-      "Type grouping for compound instances: maps LineStringType lists to representative types")
+      "Type grouping for compound instances: maps LineStringType lists to representative types. A grouping "
+      "decides both which boundaries are chained into one compound instance - consecutive boundaries are chained "
+      "as long as they stay within the same group - and the label of the result. It must assign a group to every "
+      "type a lanelet boundary can have")
       .def(vector_indexing_suite<LineStringTypeGrouping>());
 
   def("getDefaultLineStringTypeGrouping", &getDefaultLineStringTypeGrouping,
@@ -312,162 +315,277 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   def("areLineStringTypesSameGroup", &areLineStringTypesSameGroup, (arg("type1"), arg("type2"), arg("grouping")),
       "Check if two LineString types are in the same group");
 
-  class_<OrientedRect>("OrientedRect", "Oriented rectangle for feature crop area", no_init)
-      .add_property("bounds", make_function(&OrientedRect::bounds_const, return_value_policy<copy_const_reference>()));
+  class_<OrientedRect>("OrientedRect",
+                       "The local reference frame: an axis aligned rectangle rotated by a yaw angle. Everything "
+                       "outside of it is cut away when instances are processed. Use getRotatedRect to create one",
+                       no_init)
+      .add_property("bounds", make_function(&OrientedRect::bounds_const, return_value_policy<copy_const_reference>()),
+                    "The corner points of the rectangle in the map frame");
 
   def("getRotatedRect", &getRotatedRect,
-      (arg("center"), arg("extentLongitudinal"), arg("extentLateral"), arg("yaw"), arg("from2dPos")));
+      (arg("center"), arg("extentLongitudinal"), arg("extentLateral"), arg("yaw"), arg("from2dPos")),
+      "Build the local reference frame around a pose. The extents are half extents [m], i.e. the rectangle "
+      "reaches that far to the front/rear and to the left/right of the center");
   def("extractSubmap", &extractSubmap,
-      (arg("laneletMap"), arg("center"), arg("extentLongitudinal"), arg("extentLateral")));
-  def("bdTypeToEnum", static_cast<LineStringType (*)(const ConstLineString3d &)>(&bdTypeToEnum), (arg("lstring")));
-  def("bdTypeToEnumPolygon", &bdTypeToEnumPolygon, (arg("polygon")));
-  def("teTypeToEnum", static_cast<TEType (*)(const ConstLineString3d &)>(&teTypeToEnum), (arg("te")));
-  def("teTypeToEnumPolygon", &teTypeToEnumPolygon, (arg("te")));
-  def("resampleLineString", &resampleLineString, (arg("polyline"), arg("nPoints")));
-  def("cutLineString", &cutLineString, (arg("bbox"), arg("polyline")));
-  def("transformLineString", &transformLineString, (arg("bbox"), arg("polyline"), arg("pitch"), arg("roll")));
-  def("saveMapData", &saveMapData, (arg("filename"), arg("mDataVec"), arg("binary")));
-  def("loadMapData", &loadMapData, (arg("filename"), arg("binary")));
-  def("saveMapDataMultiFile", &saveMapDataMultiFile, (arg("path"), arg("filenames"), arg("mDataVec"), arg("binary")));
-  def("loadMapDataMultiFile", &loadMapDataMultiFile, (arg("path"), arg("filenames"), arg("binary")));
+      (arg("laneletMap"), arg("center"), arg("extentLongitudinal"), arg("extentLateral")),
+      "Extract the part of the map around a position, including line strings, polygons and regulatory elements");
+  def("bdTypeToEnum", static_cast<LineStringType (*)(const ConstLineString3d &)>(&bdTypeToEnum), (arg("lstring")),
+      "Get the LineStringType of a lanelet boundary from its tagging, Unknown if no tag matches");
+  def("bdTypeToEnumPolygon", &bdTypeToEnumPolygon, (arg("polygon")),
+      "Get the LineStringType of a polygon from its tagging, Unknown if no tag matches");
+  def("teTypeToEnum", static_cast<TEType (*)(const ConstLineString3d &)>(&teTypeToEnum), (arg("te")),
+      "Get the TEType of a traffic element from its tagging, Unknown if no tag matches");
+  def("teTypeToEnumPolygon", &teTypeToEnumPolygon, (arg("te")),
+      "Get the TEType of a polygon traffic element from its tagging, Unknown if no tag matches");
+  def("resampleLineString", &resampleLineString, (arg("polyline"), arg("nPoints")),
+      "Resample a polyline to nPoints equidistant points, keeping its first and last point. Returns an empty "
+      "polyline if it is shorter than 0.1 m");
+  def("cutLineString", &cutLineString, (arg("bbox"), arg("polyline")),
+      "Clip a polyline to the local reference frame. Returns one polyline per part that is inside of it");
+  def("transformLineString", &transformLineString, (arg("bbox"), arg("polyline"), arg("pitch"), arg("roll")),
+      "Transform a polyline from the map frame into the local reference frame given by bbox");
+  def("saveMapData", &saveMapData, (arg("filename"), arg("mDataVec"), arg("binary")),
+      "Save all given MapData objects into one file, as a binary or a human readable XML archive");
+  def("loadMapData", &loadMapData, (arg("filename"), arg("binary")),
+      "Load the MapData objects that saveMapData wrote into one file");
+  def("saveMapDataMultiFile", &saveMapDataMultiFile, (arg("path"), arg("filenames"), arg("mDataVec"), arg("binary")),
+      "Save the given MapData objects into one file each, path is prepended to the file names as it is");
+  def("loadMapDataMultiFile", &loadMapDataMultiFile, (arg("path"), arg("filenames"), arg("binary")),
+      "Load the MapData objects that saveMapDataMultiFile wrote into one file each");
 
-  class_<MapInstanceWrap, boost::noncopyable>("MapInstance", "Abstract base map feature class", no_init)
-      .add_property("wasCut", &MapInstance::wasCut)
-      .add_property("mapID", &MapInstance::mapID)
-      .add_property("initialized", &MapInstance::initialized)
-      .add_property("valid", &MapInstance::valid)
+  class_<MapInstanceWrap, boost::noncopyable>(
+      "MapInstance",
+      "Abstract base class of all local instance labels. An instance is created from one map element and is "
+      "brought into the local reference frame by process(), which cuts, transforms and resamples its geometry",
+      no_init)
+      .add_property("wasCut", &MapInstance::wasCut,
+                    "Whether processing removed geometry, i.e. whether this instance reaches beyond the bounding box")
+      .add_property("mapID", &MapInstance::mapID, "Id of the map element this instance was created from")
+      .add_property("initialized", &MapInstance::initialized, "Whether this instance is linked to a map element")
+      .add_property("valid", &MapInstance::valid,
+                    "Whether this instance still carries usable geometry after processing. False means the local "
+                    "bounding box does not contain (enough of) it")
       .def("computeInstanceVectors", pure_virtual(&MapInstance::computeInstanceVectors),
-           (arg("onlyPoints"), arg("pointsIn2d")))
+           (arg("onlyPoints"), arg("pointsIn2d")),
+           "Get the instance as flat vectors of the form [x, y, (z)] * n (+ type as last element unless onlyPoints). "
+           "One vector per line string piece the instance consists of after processing")
       .def("process", pure_virtual(&MapInstance::process),
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0));
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0),
+           "Cut, transform and resample this instance into the local reference frame of bbox. Values of nPoints "
+           "below 2 disable resampling. Returns whether the instance survives the cut");
 
-  class_<LineStringInstanceWrap, bases<MapInstance>, boost::noncopyable>("LineStringInstance",
-                                                                         "Abstract line string feature class", no_init)
+  class_<LineStringInstanceWrap, bases<MapInstance>, boost::noncopyable>(
+      "LineStringInstance",
+      "Abstract instance whose geometry is a line string. Keeps the result of every processing stage as a list, "
+      "since clipping can split one line into several pieces. The lists are index aligned per surviving piece",
+      no_init)
       .add_property("rawInstance",
-                    make_function(&LineStringInstance::rawInstance, return_value_policy<copy_const_reference>()))
+                    make_function(&LineStringInstance::rawInstance, return_value_policy<copy_const_reference>()),
+                    "The unprocessed geometry in the map frame, as it was taken from the map element")
       .add_property("cutInstance",
-                    make_function(&LineStringInstance::cutInstance, return_value_policy<copy_const_reference>()))
-      .add_property("cutAndTransformedInstance", make_function(&LineStringInstance::cutAndTransformedInstance,
-                                                               return_value_policy<copy_const_reference>()))
+                    make_function(&LineStringInstance::cutInstance, return_value_policy<copy_const_reference>()),
+                    "Geometry clipped to the bounding box, still in the map frame")
+      .add_property("cutAndTransformedInstance",
+                    make_function(&LineStringInstance::cutAndTransformedInstance,
+                                  return_value_policy<copy_const_reference>()),
+                    "Geometry clipped to the bounding box and transformed into its local frame")
       .add_property("cutTransformedAndResampledInstance",
                     make_function(&LineStringInstance::cutTransformedAndResampledInstance,
-                                  return_value_policy<copy_const_reference>()))
+                                  return_value_policy<copy_const_reference>()),
+                    "Geometry clipped, transformed and resampled. Empty if resampling was disabled")
       .def("computeInstanceVectors", pure_virtual(&LineStringInstance::computeInstanceVectors),
-           (arg("onlyPoints"), arg("pointsIn2d")))
+           (arg("onlyPoints"), arg("pointsIn2d")), "See MapInstance.computeInstanceVectors")
       .def("process", pure_virtual(&LineStringInstance::process),
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0))
-      .def("pointMatrices", pure_virtual(&LineStringInstance::pointMatrices), (arg("pointsIn2d")));
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0), "See MapInstance.process")
+      .def("pointMatrices", pure_virtual(&LineStringInstance::pointMatrices), (arg("pointsIn2d")),
+           "Get the points of the processed instance as numpy arrays of shape (nPoints, 2 or 3), one per piece");
 
   class_<LaneLineStringInstanceWrap, bases<LineStringInstance>, LaneLineStringInstancePtr, boost::noncopyable>(
-      "LaneLineStringInstance", "Lane line string feature class",
+      "LaneLineStringInstance",
+      "A line string that is part of a lane, e.g. a lane divider, a road border or a centerline. Its geometry "
+      "always runs in the driving direction of the lanelets using it, see the inverted property",
       init<BasicLineString3d, Id, LineStringType, Ids, bool>())
       .def(init<>())
-      .add_property("type", &LaneLineStringInstance::type)
-      .add_property("inverted", &LaneLineStringInstance::inverted)
-      .add_property("typeInt", &LaneLineStringInstance::typeInt)
+      .add_property("type", &LaneLineStringInstance::type, "Type of this line string")
+      .add_property("inverted", &LaneLineStringInstance::inverted,
+                    "Whether the geometry runs against the direction of the map element with mapID")
+      .add_property("typeInt", &LaneLineStringInstance::typeInt,
+                    "The type as int, this is what is appended to the instance vectors")
       .add_property("laneletIDs",
-                    make_function(&LaneLineStringInstance::laneletIDs, return_value_policy<copy_const_reference>()))
-      .def("addLaneletID", &LaneLineStringInstance::addLaneletID, (arg("id")))
+                    make_function(&LaneLineStringInstance::laneletIDs, return_value_policy<copy_const_reference>()),
+                    "Ids of all lanelets that use this line string, e.g. both neighbours of a shared lane divider")
+      .def("addLaneletID", &LaneLineStringInstance::addLaneletID, (arg("id")),
+           "Register another lanelet as a user of this line string")
       .def("computeInstanceVectors", &LaneLineStringInstance::computeInstanceVectors,
-           &LaneLineStringInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")))
+           &LaneLineStringInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")),
+           "See MapInstance.computeInstanceVectors. Empty before process was called")
       .def("process", &LaneLineStringInstance::process, &LaneLineStringInstanceWrap::default_process,
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0))
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0), "See MapInstance.process")
       .def("pointMatrices", &LaneLineStringInstance::pointMatrices, &LaneLineStringInstanceWrap::default_pointMatrices,
-           (arg("pointsIn2d")));
+           (arg("pointsIn2d")), "See LineStringInstance.pointMatrices. Empty before process was called");
 
   class_<TEInstanceWrap, bases<LineStringInstance>, TEInstancePtr, boost::noncopyable>(
-      "TEInstance", "Traffic element feature class", init<BasicLineString3d, Id, TEType>())
+      "TEInstance",
+      "A traffic element instance, e.g. a stop line, a road marking, a traffic light or a traffic sign. Traffic "
+      "elements are not part of a lane, they are collected from tagged line strings and polygons of the map",
+      init<BasicLineString3d, Id, TEType>())
       .def(init<>())
-      .add_property("teType", &TEInstance::teType)
+      .add_property("teType", &TEInstance::teType, "Type of this traffic element")
       .def("computeInstanceVectors", &TEInstance::computeInstanceVectors,
-           &TEInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")))
+           &TEInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")),
+           "See MapInstance.computeInstanceVectors. Empty before process was called")
       .def("process", &TEInstance::process, &TEInstanceWrap::default_process,
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0))
-      .def("pointMatrices", &TEInstance::pointMatrices, &TEInstanceWrap::default_pointMatrices, (arg("pointsIn2d")));
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0), "See MapInstance.process")
+      .def("pointMatrices", &TEInstance::pointMatrices, &TEInstanceWrap::default_pointMatrices, (arg("pointsIn2d")),
+           "See LineStringInstance.pointMatrices. Empty before process was called");
 
   class_<LaneletInstanceWrap, bases<MapInstance>, LaneletInstancePtr, boost::noncopyable>(
-      "LaneletInstance", "Lanelet feature class that contains lower level LaneLineStringInstances",
+      "LaneletInstance",
+      "One lanelet, made up of the instances of its left boundary, right boundary and centerline. Only lanelets "
+      "that can be driven on become lanelet instances",
       init<LaneLineStringInstancePtr, LaneLineStringInstancePtr, LaneLineStringInstancePtr, Id>())
       .def(init<ConstLanelet>())
       .def(init<>())
-      .add_property("leftBoundary", make_function(&LaneletInstance::leftBoundary))
-      .add_property("rightBoundary", make_function(&LaneletInstance::rightBoundary))
-      .add_property("centerline", make_function(&LaneletInstance::centerline))
-      .def("setReprType", &LaneletInstance::setReprType, (arg("reprType")))
+      .add_property("leftBoundary", make_function(&LaneletInstance::leftBoundary), "Instance of the left boundary")
+      .add_property("rightBoundary", make_function(&LaneletInstance::rightBoundary), "Instance of the right boundary")
+      .add_property("centerline", make_function(&LaneletInstance::centerline), "Instance of the centerline")
+      .def("setReprType", &LaneletInstance::setReprType, (arg("reprType")),
+           "Set how computeInstanceVectors represents this lanelet, defaults to LaneletRepresentationType.Centerline")
       .def("computeInstanceVectors", &LaneletInstance::computeInstanceVectors,
-           &LaneletInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")))
+           &LaneletInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")),
+           "Get the instance vectors. With representation type Centerline: centerline points, then the type of the "
+           "left and the right boundary. With Boundaries: left points, right points, then both types")
       .def("process", &LaneletInstance::process, &LaneletInstanceWrap::default_process,
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0));
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0),
+           "Processes the boundaries and the centerline. Invalid if any of the three is invalid");
 
   class_<CompoundLaneLineStringInstanceWrap, bases<LaneLineStringInstance>, CompoundLaneLineStringInstancePtr,
-         boost::noncopyable>("CompoundLaneLineStringInstance",
-                             "Compound lane line string feature class that can trace back the individual features",
-                             init<LaneLineStringInstanceList, LineStringType>())
+         boost::noncopyable>(
+      "CompoundLaneLineStringInstance",
+      "Several line string instances chained into one, e.g. all lane dividers along one lane. Its type is the "
+      "representative type of its group, not the type of its first member. The individual instances stay "
+      "accessible through the features property, so it can be traced back to the map elements it was built from",
+      init<LaneLineStringInstanceList, LineStringType>())
       .def(init<>())
-      .add_property("features", make_function(&CompoundLaneLineStringInstance::features))
-      .add_property("pathLengthsRaw", make_function(&CompoundLaneLineStringInstance::pathLengthsRaw,
-                                                    return_value_policy<copy_const_reference>()))
-      .add_property("pathLengthsProcessed", make_function(&CompoundLaneLineStringInstance::pathLengthsProcessed,
-                                                          return_value_policy<copy_const_reference>()))
-      .add_property("processedInstancesValid", make_function(&CompoundLaneLineStringInstance::processedInstancesValid,
-                                                             return_value_policy<copy_const_reference>()))
+      .add_property("features", make_function(&CompoundLaneLineStringInstance::features),
+                    "The individual instances this was built from, in the order they are chained")
+      .add_property("pathLengthsRaw",
+                    make_function(&CompoundLaneLineStringInstance::pathLengthsRaw,
+                                  return_value_policy<copy_const_reference>()),
+                    "Cumulative length [m] of the raw geometry up to and including each member of features")
+      .add_property("pathLengthsProcessed",
+                    make_function(&CompoundLaneLineStringInstance::pathLengthsProcessed,
+                                  return_value_policy<copy_const_reference>()),
+                    "Cumulative length [m] of the cut geometry up to and including each member of features")
+      .add_property("processedInstancesValid",
+                    make_function(&CompoundLaneLineStringInstance::processedInstancesValid,
+                                  return_value_policy<copy_const_reference>()),
+                    "Per member of features: whether enough of it survived the cut")
       .def("computeInstanceVectors", &CompoundLaneLineStringInstance::computeInstanceVectors,
-           &CompoundLaneLineStringInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")))
+           &CompoundLaneLineStringInstanceWrap::default_computeInstanceVectors, (arg("onlyPoints"), arg("pointsIn2d")),
+           "See MapInstance.computeInstanceVectors. Empty before process was called")
       .def("process", &CompoundLaneLineStringInstance::process, &CompoundLaneLineStringInstanceWrap::default_process,
-           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0))
+           (arg("bbox"), arg("paramType"), arg("nPoints"), arg("pitch") = 0, arg("roll") = 0),
+           "Processes the chained geometry as well as every individual instance. Valid if at least one member survives")
       .def("pointMatrices", &CompoundLaneLineStringInstance::pointMatrices,
-           &CompoundLaneLineStringInstanceWrap::default_pointMatrices, (arg("pointsIn2d")));
+           &CompoundLaneLineStringInstanceWrap::default_pointMatrices, (arg("pointsIn2d")),
+           "See LineStringInstance.pointMatrices. Empty before process was called");
 
-  class_<Edge>("Edge", "Struct of a lane graph edge", init<Id, Id, bool>())
+  class_<Edge>("Edge", "One edge of the lane graph or the traffic element graph, given by the ids it connects",
+               init<Id, Id, bool>())
       .def(init<>())
-      .def_readwrite("el1", &Edge::el1_)
-      .def_readwrite("el2", &Edge::el2_)
-      .def_readwrite("isLaneChange", &Edge::isLaneChange_);
+      .def_readwrite("el1", &Edge::el1_, "Id of the element the edge starts at")
+      .def_readwrite("el2", &Edge::el2_, "Id of the element the edge leads to")
+      .def_readwrite("isLaneChange", &Edge::isLaneChange_,
+                     "True for a lateral (lane change) edge, False for a longitudinal (successor) edge");
 
   {
     scope inMapData =
-        class_<MapData, MapDataPtr>("MapData", "Class for holding, accessing and processing of map data")
+        class_<MapData, MapDataPtr>(
+            "MapData",
+            "All local instance labels of one local reference frame pose. Created in two phases: build extracts "
+            "the instances from a local submap, processAll brings them into the local reference frame. Only after "
+            "the second phase are the accessors and getTensorInstanceData meaningful")
             .def(init<>())
             .def("build", &MapData::build,
                  (arg("localSubmap"), arg("localSubmapGraph"), arg("trafficRules"),
                   arg("bikeSubmapGraph") = routing::RoutingGraphConstPtr(), arg("ignoreMapElevation") = false,
                   arg("lineStringTypeGrouping") = getDefaultLineStringTypeGrouping(),
-                  arg("teTypeGrouping") = getDefaultTETypeGrouping()))
+                  arg("teTypeGrouping") = getDefaultTETypeGrouping()),
+                 "Extract all instances of a local submap. Throws if lineStringTypeGrouping does not cover every "
+                 "type a lanelet boundary can have")
             .staticmethod("build")
             .def("processAll", &MapData::processAll,
                  (arg("bbox"), arg("paramType"), arg("resampleLanes") = true, arg("nPointsLanes") = 0,
-                  arg("resampleTE") = true, arg("nPointsTE") = 0, arg("pitch") = 0, arg("roll") = 0))
-            .def("lineStringsOfType", &MapData::lineStringsOfType, (arg("type")))
-            .def("validLineStringsOfType", &MapData::validLineStringsOfType, (arg("type")))
-            .def("compoundLineStringsOfType", &MapData::compoundLineStringsOfType, (arg("type")))
-            .def("validCompoundLineStringsOfType", &MapData::validCompoundLineStringsOfType, (arg("type")))
+                  arg("resampleTE") = true, arg("nPointsTE") = 0, arg("pitch") = 0, arg("roll") = 0),
+                 "Process all instances into the local reference frame given by bbox. Values of nPointsLanes or "
+                 "nPointsTE below 2 disable resampling as well. Returns whether every instance is still valid "
+                 "afterwards - False just means that some are outside of the bounding box")
+            .def("lineStringsOfType", &MapData::lineStringsOfType, (arg("type")),
+                 "All lane line strings of the given type, by map id")
+            .def("validLineStringsOfType", &MapData::validLineStringsOfType, (arg("type")),
+                 "Like lineStringsOfType, but without the instances that did not survive processing")
+            .def("compoundLineStringsOfType", &MapData::compoundLineStringsOfType, (arg("type")),
+                 "All compound line strings of the given type")
+            .def("validCompoundLineStringsOfType", &MapData::validCompoundLineStringsOfType, (arg("type")),
+                 "Like compoundLineStringsOfType, but without the instances that did not survive processing")
             .def("associatedCpdLineStringsOfType", &MapData::associatedCpdLineStringsOfType,
-                 (arg("mapId"), arg("type")))
-            .def("teInstancesOfType", &MapData::teInstancesOfType, (arg("type")))
-            .def("validTEInstancesOfType", &MapData::validTEInstancesOfType, (arg("type")))
+                 (arg("mapId"), arg("type")),
+                 "All compound instances of the given type that a map element is part of. mapId is the id of a "
+                 "member line string or of a lanelet using it, for compound centerlines it is the lanelet id")
+            .def("teInstancesOfType", &MapData::teInstancesOfType, (arg("type")),
+                 "All traffic elements of the given type, by map id")
+            .def("validTEInstancesOfType", &MapData::validTEInstancesOfType, (arg("type")),
+                 "Like teInstancesOfType, but without the instances that did not survive processing")
             .add_property("laneletInstances",
-                          make_function(&MapData::laneletInstances, return_value_policy<copy_const_reference>()))
-            .add_property("llEdges", make_function(&MapData::llEdges, return_value_policy<copy_const_reference>()))
-            .add_property("teEdges", make_function(&MapData::teEdges, return_value_policy<copy_const_reference>()))
+                          make_function(&MapData::laneletInstances, return_value_policy<copy_const_reference>()),
+                          "All lanelet instances by map id. Non-driving lanelets are not part of this")
+            .add_property("llEdges", make_function(&MapData::llEdges, return_value_policy<copy_const_reference>()),
+                          "Lane graph edges by source lanelet id: successors and lane changes between lanelets")
+            .add_property("teEdges", make_function(&MapData::teEdges, return_value_policy<copy_const_reference>()),
+                          "Traffic element edges by source element id, targets are lanelets or traffic elements")
             .add_property("teToCenterlineEdges",
-                          make_function(&MapData::teToCenterlineEdges, return_value_policy<copy_const_reference>()))
+                          make_function(&MapData::teToCenterlineEdges, return_value_policy<copy_const_reference>()),
+                          "teEdges resolved to instance pairs, for the edges that lead to a lanelet")
             .add_property("teToTEEdges",
-                          make_function(&MapData::teToTEEdges, return_value_policy<copy_const_reference>()))
-            .add_property("uuid", make_function(&MapData::uuid, return_value_policy<copy_const_reference>()))
-            .def("getTensorInstanceData", &MapData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")));
+                          make_function(&MapData::teToTEEdges, return_value_policy<copy_const_reference>()),
+                          "teEdges resolved to instance pairs, for the edges that lead to another traffic element")
+            .add_property("uuid", make_function(&MapData::uuid, return_value_policy<copy_const_reference>()),
+                          "Randomly generated id of this sample, kept across serialization")
+            .def("getTensorInstanceData", &MapData::getTensorInstanceData, (arg("pointsIn2d"), arg("ignoreBuffer")),
+                 "Get all instance labels as numpy arrays. The result is buffered, so if the underlying instances "
+                 "change you need to set ignoreBuffer. Changing pointsIn2d alone does not invalidate the buffer");
 
-    class_<MapData::TensorInstanceData>("TensorInstanceData", "TensorInstanceData class for MapData", init<>())
-        .def("lineStringsOfType", &MapData::TensorInstanceData::lineStringsOfType, (arg("type")))
-        .def("compoundLineStringsOfType", &MapData::TensorInstanceData::compoundLineStringsOfType, (arg("type")))
-        .def("teInstancesOfType", &MapData::TensorInstanceData::teInstancesOfType, (arg("type")))
+    class_<MapData::TensorInstanceData>(
+        "TensorInstanceData",
+        "All instance labels of a MapData object as numpy arrays. Instances are grouped by type and only valid "
+        "ones are included. Within one type, an instance is identified by its position in the returned list - "
+        "that is the index the edge lists refer to. Every access copies, so modifying a returned array does not "
+        "modify this object",
+        init<>())
+        .def("lineStringsOfType", &MapData::TensorInstanceData::lineStringsOfType, (arg("type")),
+             "Point matrices of all valid lane line strings of the given type")
+        .def("compoundLineStringsOfType", &MapData::TensorInstanceData::compoundLineStringsOfType, (arg("type")),
+             "Point matrices of all valid compound line strings of the given type")
+        .def("teInstancesOfType", &MapData::TensorInstanceData::teInstancesOfType, (arg("type")),
+             "Point matrices of all valid traffic elements of the given type")
         .def("pointMatrixCpdLineStrings", &MapData::TensorInstanceData::pointMatrixCpdLineStrings,
-             (arg("type"), arg("index")))
-        .add_property("teToCenterlineIndexEdges", make_function(&MapData::TensorInstanceData::teToCenterlineIndexEdges,
-                                                                return_value_policy<copy_const_reference>()))
-        .add_property("teToTEIndexEdges", make_function(&MapData::TensorInstanceData::teToTEIndexEdges,
-                                                        return_value_policy<copy_const_reference>()))
+             (arg("type"), arg("index")),
+             "Get the instance a point matrix of compoundLineStringsOfType came from, which gives access to the "
+             "map elements it was built from. Throws if the type or the index does not exist")
+        .add_property("teToCenterlineIndexEdges",
+                      make_function(&MapData::TensorInstanceData::teToCenterlineIndexEdges,
+                                    return_value_policy<copy_const_reference>()),
+                      "Traffic element to centerline edges as (source type, source index, target index) tuples, "
+                      "with indices local to their type")
+        .add_property("teToTEIndexEdges",
+                      make_function(&MapData::TensorInstanceData::teToTEIndexEdges,
+                                    return_value_policy<copy_const_reference>()),
+                      "Traffic element to traffic element edges as (source type, source index, target type, "
+                      "target index) tuples, with indices local to their type")
         .add_property("uuid",
-                      make_function(&MapData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()));
+                      make_function(&MapData::TensorInstanceData::uuid, return_value_policy<copy_const_reference>()),
+                      "Id of the sample, identical to the uuid of the MapData object this came from");
   }
 
   {
@@ -486,33 +604,65 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
                                                                 std::vector<double>, std::vector<double>) =
         &MapDataInterface::mapDataBatch;
     scope inMapDataInterface =
-        class_<MapDataInterface>("MapDataInterface", "Main Interface Class for processing of Lanelet maps",
-                                 init<LaneletMapConstPtr>())
+        class_<MapDataInterface>(
+            "MapDataInterface",
+            "Main interface class of the module: turns a Lanelet2 map into local instance labels. Set a local "
+            "reference frame pose with setCurrPosAndExtractSubmap, then get the labels for it with mapData. For "
+            "more than one pose, prefer the mapDataBatch methods - they are self contained and do not touch the "
+            "current position. The traffic rules are currently fixed to Germany for vehicles and bicycles",
+            init<LaneletMapConstPtr>())
             .def(init<LaneletMapConstPtr, MapDataInterface::Configuration>())
             .add_property("config",
-                          make_function(&MapDataInterface::config, return_value_policy<copy_const_reference>()))
-            .def("setCurrPosAndExtractSubmap2d", setCurrPosAndExtractSubmap2d, (arg("pt"), arg("yaw")))
-            .def("setCurrPosAndExtractSubmap", setCurrPosAndExtractSubmap4d, (arg("pt"), arg("yaw")))
+                          make_function(&MapDataInterface::config, return_value_policy<copy_const_reference>()),
+                          "The configuration this interface was created with")
+            .def("setCurrPosAndExtractSubmap2d", setCurrPosAndExtractSubmap2d, (arg("pt"), arg("yaw")),
+                 "Set the local reference frame from a 2d pose [m, rad] and extract the submap around it. Since "
+                 "there is no elevation to relate to, all instance output of this frame will be 2d")
+            .def("setCurrPosAndExtractSubmap", setCurrPosAndExtractSubmap4d, (arg("pt"), arg("yaw")),
+                 "Set the local reference frame from a 3d position and a yaw angle [m, rad], with pitch and roll "
+                 "assumed to be 0, and extract the submap around it")
             .def("setCurrPosAndExtractSubmap", setCurrPosAndExtractSubmap6d,
-                 (arg("pt"), arg("yaw"), arg("pitch"), arg("roll")))
-            .def("mapData", &MapDataInterface::mapData, (arg("processAll")))
-            .def("mapDataBatch2d", mapDataBatch2d, (arg("pts"), arg("yaws")))
-            .def("mapDataBatch", mapDataBatch4d, (arg("pts"), arg("yaws")))
-            .def("mapDataBatch", mapDataBatch6d, (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")));
+                 (arg("pt"), arg("yaw"), arg("pitch"), arg("roll")),
+                 "Set the local reference frame from a full 3d pose [m, rad] and extract the submap around it")
+            .def("mapData", &MapDataInterface::mapData, (arg("processAll")),
+                 "Get the instance labels of the current local reference frame. If processAll is False you get "
+                 "the raw extracted data and have to call MapData.processAll yourself. Throws if no position was "
+                 "set with setCurrPosAndExtractSubmap before")
+            .def("mapDataBatch2d", mapDataBatch2d, (arg("pts"), arg("yaws")),
+                 "Get the processed instance labels of several 2d poses at once")
+            .def("mapDataBatch", mapDataBatch4d, (arg("pts"), arg("yaws")),
+                 "Get the processed instance labels of several 3d positions with yaw angles at once, with pitch "
+                 "and roll assumed to be 0")
+            .def("mapDataBatch", mapDataBatch6d, (arg("pts"), arg("yaws"), arg("pitches"), arg("rolls")),
+                 "Get the processed instance labels of several full 3d poses at once");
 
-    class_<MapDataInterface::Configuration>("Configuration", "Configuration class for MapDataInterface", init<>())
+    class_<MapDataInterface::Configuration>(
+        "Configuration", "Parameters of the extraction and processing done by MapDataInterface", init<>())
         .def(init<LaneletRepresentationType, ParametrizationType, double, double, int, int>())
-        .def_readwrite("reprType", &MapDataInterface::Configuration::reprType)
-        .def_readwrite("paramType", &MapDataInterface::Configuration::paramType)
-        .def_readwrite("submapExtentLongitudinal", &MapDataInterface::Configuration::submapExtentLongitudinal)
-        .def_readwrite("submapExtentLateral", &MapDataInterface::Configuration::submapExtentLateral)
-        .def_readwrite("ignoreMapElevation", &MapDataInterface::Configuration::ignoreMapElevation)
-        .def_readwrite("resampleLanes", &MapDataInterface::Configuration::resampleLanes)
-        .def_readwrite("nPointsLanes", &MapDataInterface::Configuration::nPointsLanes)
-        .def_readwrite("resampleTE", &MapDataInterface::Configuration::resampleTE)
-        .def_readwrite("nPointsTE", &MapDataInterface::Configuration::nPointsTE)
-        .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping)
-        .def_readwrite("teTypeGrouping", &MapDataInterface::Configuration::teTypeGrouping);
+        .def_readwrite("reprType", &MapDataInterface::Configuration::reprType,
+                       "How lanelet instances are laid out in their instance vectors")
+        .def_readwrite("paramType", &MapDataInterface::Configuration::paramType,
+                       "Parametrization of the instance geometry, only ParametrizationType.LineString is implemented")
+        .def_readwrite("submapExtentLongitudinal", &MapDataInterface::Configuration::submapExtentLongitudinal,
+                       "Half extent [m] of the local reference frame in driving direction, i.e. this much to the "
+                       "front and to the rear")
+        .def_readwrite("submapExtentLateral", &MapDataInterface::Configuration::submapExtentLateral,
+                       "Half extent [m] of the local reference frame in lateral direction, i.e. this much to the "
+                       "left and to the right")
+        .def_readwrite("ignoreMapElevation", &MapDataInterface::Configuration::ignoreMapElevation,
+                       "If True, elevation (z coordinate) in map elements is ignored and set to 0")
+        .def_readwrite("resampleLanes", &MapDataInterface::Configuration::resampleLanes,
+                       "If True, lane instances are resampled; if False, no fixed resampling")
+        .def_readwrite("nPointsLanes", &MapDataInterface::Configuration::nPointsLanes,
+                       "Number of points for lane resampling, values below 2 disable resampling as well")
+        .def_readwrite("resampleTE", &MapDataInterface::Configuration::resampleTE,
+                       "If True, traffic element instances are resampled; if False, no fixed resampling")
+        .def_readwrite("nPointsTE", &MapDataInterface::Configuration::nPointsTE,
+                       "Number of points for traffic element resampling, values below 2 disable resampling as well")
+        .def_readwrite("lineStringTypeGrouping", &MapDataInterface::Configuration::lineStringTypeGrouping,
+                       "Grouping of types for compound instance generation, see LineStringTypeGrouping")
+        .def_readwrite("teTypeGrouping", &MapDataInterface::Configuration::teTypeGrouping,
+                       "Grouping of types for traffic element instance generation, see TETypeGrouping");
   }
 
   // Eigen, stl etc. converters
@@ -557,7 +707,8 @@ BOOST_PYTHON_MODULE(PYTHON_API_MODULE_NAME) {  // NOLINT
   converters::PyTuple<TEType, size_t, TEType, size_t>();
   class_<std::vector<bool>>("BoolList").def(vector_indexing_suite<std::vector<bool>>());
 
-  def("toPointMatrix", &toPointMatrix, (arg("lString"), arg("pointsIn2d")));
+  def("toPointMatrix", &toPointMatrix, (arg("lString"), arg("pointsIn2d")),
+      "Convert a line string to a numpy array of shape (nPoints, 2 or 3)");
 
   implicitly_convertible<routing::RoutingGraphPtr, routing::RoutingGraphConstPtr>();
 }
