@@ -16,8 +16,12 @@ ARG PY_VERSION=3.12
 RUN pyenv update \
   && pyenv install -s $PY_VERSION \
   && pyenv global $PY_VERSION
-RUN pip install "conan~=2.8.0" catkin_pkg oldest-supported-numpy wheel auditwheel cmake
-# oldest-supported-numpy for ABI compatibility
+# oldest-supported-numpy for ABI compatibility. Its pin table stops before 3.13 and falls through to an
+# unpinned "numpy" there, which resolves to 2.x - and boost 1.81 cannot build against the numpy 2 C-API
+# (PyArray_Descr lost its elsize member). Keep 1.x explicitly on 3.13 to apply the same ABI policy.
+RUN pip install "conan~=2.8.0" catkin_pkg wheel auditwheel cmake \
+  "oldest-supported-numpy; python_version < '3.13'" \
+  "numpy<2.0; python_version >= '3.13'"
 
 # install patchelf
 RUN wget https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-x86_64.tar.gz \

@@ -78,13 +78,11 @@ RUN set -ex; \
         libpugixml-dev \
         libboost-python-dev \
         pip \
+        ${PY_VERSION}-numpy \
         ${PY_VERSION}-rospkg \
         ros-$ROS_DISTRO-ros-environment && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-# install python dependencies (numpy)
-RUN pip install numpy
 
 # ros version specific dependencies
 RUN set -ex; \
