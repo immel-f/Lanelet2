@@ -54,8 +54,11 @@ FROM lanelet2_conan_src as lanelet2_conan
 ARG CONAN_ARGS=""
 ARG PLATFORM="manylinux_2_31_x86_64"
 WORKDIR /home/conan/src/lanelet2
+# b2 is an application package, so conancenter ships one prebuilt binary for it instead of building it
+# per profile. That binary needs GLIBC_2.34, which none of the build images provide (gcc7 has 2.23,
+# gcc10 has 2.31), so build this one tool from source everywhere.
 RUN conan profile detect \
-  && conan create . --format=json --build=missing -o "&:build_wheel=True" -o "&:platform=${PLATFORM}" ${CONAN_ARGS} > conaninfo.json
+  && conan create . --format=json --build=missing --build="b2/*" -o "&:build_wheel=True" -o "&:platform=${PLATFORM}" ${CONAN_ARGS} > conaninfo.json
 
 # obtain wheel
 FROM lanelet2_conan as lanelet2_conan_with_pip_wheel

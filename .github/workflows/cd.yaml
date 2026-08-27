@@ -18,16 +18,12 @@ jobs:
         # this should be kept in sync with ci.yaml
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
         include:
-          # The gcc7 image is old enough that the prebuilt b2 binary from conancenter does not run on
-          # it (it needs GLIBC_2.34, the image has 2.23), so build that one tool from source there.
           - python-version: "3.8"
             platform-version: manylinux_2_27_x86_64
             image-version: conanio/gcc7:latest
-            conan-args: --build=b2/*
           - python-version: "3.9"
             platform-version: manylinux_2_27_x86_64
             image-version: conanio/gcc7:latest
-            conan-args: --build=b2/*
           - python-version: "3.10"
             platform-version: manylinux_2_31_x86_64
             image-version: conanio/gcc10:latest
@@ -58,7 +54,6 @@ jobs:
             FROM=${{ matrix.image-version }}
             PY_VERSION=${{ matrix.python-version }}
             PLATFORM=${{ matrix.platform-version }}
-            CONAN_ARGS=${{ matrix.conan-args }}
 
       - name: Create output directory
         run: mkdir -p ${{ github.workspace }}/output
