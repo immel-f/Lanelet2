@@ -113,11 +113,11 @@ class Lanelet2Conan(ConanFile):
     virtualrunenv = True
 
     requires = (
-        # boost 1.87 for the numpy 2 builds, see .github/conan_dockerfile/Dockerfile. python < 3.10
-        # stays on 1.75 and numpy 1.
+        # boost 1.87 for the numpy 2 builds, see .github/conan_dockerfile/Dockerfile. python 3.8 stays
+        # on 1.75 and numpy 1, because numpy 2 requires python >= 3.9.
         # 1.86 and older cannot be used for a numpy 2 build: they dereference PyArray_Descr::elsize in
         # libs/python/src/numpy/dtype.cpp, which numpy 2 made private in favour of PyDataType_ELSIZE().
-        "boost/1.87.0" if sys.version_info.minor > 9 else "boost/1.75.0",
+        "boost/1.87.0" if sys.version_info.minor > 8 else "boost/1.75.0",
         "eigen/3.4.0",
         "geographiclib/1.52",
         "pugixml/1.13",
