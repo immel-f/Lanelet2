@@ -26,7 +26,11 @@ RUN pyenv update \
 # conan 2.9.2 is the first release whose default conancenter remote points at https://center2.conan.io.
 # The old https://center.conan.io was frozen and carries no recipe newer than boost 1.86.0, so an older
 # client cannot resolve the boost version needed for the numpy 2 build.
+# urllib3 v2 refuses to import unless the ssl module was built against OpenSSL 1.1.1+, and the images
+# used for python 3.8 and 3.9 (conanio/gcc7, see the matrix in .github/workflows/cd.yaml) only have
+# OpenSSL 1.0.2g. conan accepts urllib3 >=1.26.6,<3, so keep it on 1.x there.
 RUN pip install "conan~=2.31.0" catkin_pkg wheel auditwheel cmake \
+  "urllib3<2; python_version < '3.10'" \
   "oldest-supported-numpy; python_version < '3.9'" \
   "numpy>=2.0; python_version >= '3.9'"
 
