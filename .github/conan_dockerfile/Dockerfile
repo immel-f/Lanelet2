@@ -17,12 +17,13 @@ RUN pyenv update \
   && pyenv install -s $PY_VERSION \
   && pyenv global $PY_VERSION
 # numpy build-time ABI policy, mirroring the boost version picked in conanfile.py:
-# - python >= 3.9 builds against boost 1.87 and numpy 2. Building against numpy 2 headers keeps the
+# - python >= 3.10 builds against boost 1.87 and numpy 2. Building against numpy 2 headers keeps the
 #   extension usable with runtime numpy >= 1.19 as well, so one wheel serves both numpy generations.
-#   This is also what makes python 3.13 possible at all, since numpy 1 has no cp313 wheels. On 3.9 this
-#   resolves to the numpy 2.0.x series, the last one supporting it.
-# - python 3.8 builds against boost 1.75 and stays on numpy 1, since numpy 2 requires python >= 3.9.
-#   oldest-supported-numpy picks the oldest ABI there, which is forward compatible within numpy 1.x.
+#   This is also what makes python 3.13 possible at all, since numpy 1 has no cp313 wheels.
+# - python < 3.10 builds against boost 1.75 and stays on numpy 1. Those wheels are built on the
+#   conanio/gcc7 image, where boost 1.87 cannot be used at all: gcc 7 fails to resolve the
+#   lanelet2::geometry overloads against its boost geometry. oldest-supported-numpy picks the oldest
+#   ABI there, which is forward compatible within numpy 1.x.
 # conan 2.9.2 is the first release whose default conancenter remote points at https://center2.conan.io.
 # The old https://center.conan.io was frozen and carries no recipe newer than boost 1.86.0, so an older
 # client cannot resolve the boost version needed for the numpy 2 build.
@@ -31,8 +32,8 @@ RUN pyenv update \
 # OpenSSL 1.0.2g. conan accepts urllib3 >=1.26.6,<3, so keep it on 1.x there.
 RUN pip install "conan~=2.31.0" catkin_pkg wheel auditwheel cmake \
   "urllib3<2; python_version < '3.10'" \
-  "oldest-supported-numpy; python_version < '3.9'" \
-  "numpy>=2.0; python_version >= '3.9'"
+  "oldest-supported-numpy; python_version < '3.10'" \
+  "numpy>=2.0; python_version >= '3.10'"
 
 # install patchelf
 RUN wget https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-x86_64.tar.gz \
