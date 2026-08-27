@@ -16,12 +16,16 @@ ARG PY_VERSION=3.12
 RUN pyenv update \
   && pyenv install -s $PY_VERSION \
   && pyenv global $PY_VERSION
-# oldest-supported-numpy for ABI compatibility. Its pin table stops before 3.13 and falls through to an
-# unpinned "numpy" there, which resolves to 2.x - and boost 1.81 cannot build against the numpy 2 C-API
-# (PyArray_Descr lost its elsize member). Keep 1.x explicitly on 3.13 to apply the same ABI policy.
+# numpy build-time ABI policy, mirroring the boost version picked in conanfile.py:
+# - python >= 3.9 builds against boost 1.86, whose Boost.Python supports the numpy 2 C-API. Building
+#   against numpy 2 headers keeps the extension usable with runtime numpy >= 1.19 as well, so one wheel
+#   supports both numpy generations. This is also what makes python 3.13 possible at all, since numpy 1
+#   has no cp313 wheels. On 3.9 this resolves to the numpy 2.0.x series, the last one supporting it.
+# - python 3.8 builds against boost 1.75 and stays on numpy 1, since numpy 2 requires python >= 3.9.
+#   oldest-supported-numpy picks the oldest ABI there, which is forward compatible within numpy 1.x.
 RUN pip install "conan~=2.8.0" catkin_pkg wheel auditwheel cmake \
-  "oldest-supported-numpy; python_version < '3.13'" \
-  "numpy<2.0; python_version >= '3.13'"
+  "oldest-supported-numpy; python_version < '3.9'" \
+  "numpy>=2.0; python_version >= '3.9'"
 
 # install patchelf
 RUN wget https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-x86_64.tar.gz \

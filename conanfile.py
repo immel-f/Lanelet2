@@ -113,7 +113,10 @@ class Lanelet2Conan(ConanFile):
     virtualrunenv = True
 
     requires = (
-        "boost/1.81.0" if sys.version_info.minor > 9 else "boost/1.75.0",
+        # boost 1.86 is the first release whose Boost.Python builds against the numpy 2 C-API.
+        # python 3.8 stays on 1.75 (and therefore on numpy 1), because numpy 2 requires python >= 3.9.
+        # See .github/conan_dockerfile/Dockerfile.
+        "boost/1.86.0" if sys.version_info.minor > 8 else "boost/1.75.0",
         "eigen/3.4.0",
         "geographiclib/1.52",
         "pugixml/1.13",
