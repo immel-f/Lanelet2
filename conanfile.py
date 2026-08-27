@@ -219,7 +219,10 @@ class Lanelet2Conan(ConanFile):
                 os.path.join(self.package_folder, self._pythonpath()),
                 whl_tmp,
             )
-            self.run(f"pip wheel -w {whl_tmp} {whl_tmp}")
+            # --no-deps: only build the lanelet2 wheel. Dependency wheels would land in the same
+            # directory and auditwheel repair below globs all of them, which fails on the
+            # libraries they vendor themselves (e.g. numpy's bundled libgfortran).
+            self.run(f"pip wheel --no-deps -w {whl_tmp} {whl_tmp}")
             self.run(
                 f"export LD_LIBRARY_PATH={os.path.join(self.package_folder, self.cpp_info.libdir)}:$LD_LIBRARY_PATH && auditwheel repair -w {whl_out} --plat {self.options.platform} {whl_tmp}/*.whl",
                 scope="conanrun",
