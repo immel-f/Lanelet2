@@ -113,10 +113,11 @@ class Lanelet2Conan(ConanFile):
     virtualrunenv = True
 
     requires = (
-        # boost 1.86 is the first release whose Boost.Python builds against the numpy 2 C-API.
+        # Boost.Python has to build against the numpy 2 C-API, which needs a release that reads the
+        # item size via PyDataType_ELSIZE() instead of PyArray_Descr::elsize.
         # python 3.8 stays on 1.75 (and therefore on numpy 1), because numpy 2 requires python >= 3.9.
         # See .github/conan_dockerfile/Dockerfile.
-        "boost/1.86.0" if sys.version_info.minor > 8 else "boost/1.75.0",
+        "boost/1.87.0" if sys.version_info.minor > 8 else "boost/1.75.0",
         "eigen/3.4.0",
         "geographiclib/1.52",
         "pugixml/1.13",
@@ -164,7 +165,8 @@ class Lanelet2Conan(ConanFile):
             self.package_folder, self._pythonpath()
         )
         cmake.configure(
-            variables={"PYTHON_VERSION": get_py_version(), "MRT_CMAKE_ENV": mrt_env}
+            variables={"PYTHON_VERSION": get_py_version(),
+                       "MRT_CMAKE_ENV": mrt_env}
         )
         return cmake
 
@@ -202,7 +204,8 @@ class Lanelet2Conan(ConanFile):
         )  # not working as long as the pythonpath is not adapted first
         if self.options.build_wheel:
             with (
-                Path(self.source_folder) / "lanelet2_python" / "setup.py.template"
+                Path(self.source_folder) /
+                "lanelet2_python" / "setup.py.template"
             ).open() as f:
                 setup_template = f.read()
             setup_py = setup_template.replace("{{ version }}", self.version)

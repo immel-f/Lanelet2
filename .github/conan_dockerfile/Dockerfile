@@ -17,7 +17,7 @@ RUN pyenv update \
   && pyenv install -s $PY_VERSION \
   && pyenv global $PY_VERSION
 # numpy build-time ABI policy, mirroring the boost version picked in conanfile.py:
-# - python >= 3.9 builds against boost 1.86, whose Boost.Python supports the numpy 2 C-API. Building
+# - python >= 3.9 builds against boost 1.87, whose Boost.Python supports the numpy 2 C-API. Building
 #   against numpy 2 headers keeps the extension usable with runtime numpy >= 1.19 as well, so one wheel
 #   supports both numpy generations. This is also what makes python 3.13 possible at all, since numpy 1
 #   has no cp313 wheels. On 3.9 this resolves to the numpy 2.0.x series, the last one supporting it.
