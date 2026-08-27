@@ -97,6 +97,15 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+      # numpy has to come from pypi.org, because the wheel install below runs with --no-index and can
+      # therefore not resolve the dependency itself. The bound matches the numpy 1.x C-API the extension
+      # is built against, see .github/conan_dockerfile/Dockerfile.
+      - name: Install numpy 24.04
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        run: pip install "numpy<2.0" --break-system-packages
+      - name: Install numpy
+        if: ${{ matrix.os != 'ubuntu-24.04' }}
+        run: pip install "numpy<2.0"
       - name: Install wheel 24.04
         # use dist/ directory as package source instead of pypi.org
         if: ${{ matrix.os == 'ubuntu-24.04' }}
