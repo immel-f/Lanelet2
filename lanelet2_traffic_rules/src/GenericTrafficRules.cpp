@@ -35,7 +35,8 @@ LaneChangeType getChangeType(const std::string& type, const std::string& subtype
       {{AttributeValueString::LineThin, AttributeValueString::DashedSolid}, LaneChangeType::ToRight},
       {{AttributeValueString::LineThick, AttributeValueString::DashedSolid}, LaneChangeType::ToRight},
       {{AttributeValueString::LineThin, AttributeValueString::SolidDashed}, LaneChangeType::ToLeft},
-      {{AttributeValueString::LineThick, AttributeValueString::SolidDashed}, LaneChangeType::ToLeft}};
+      {{AttributeValueString::LineThick, AttributeValueString::SolidDashed}, LaneChangeType::ToLeft},
+      {{AttributeValueString::BikeMarking, AttributeValueString::Dashed}, LaneChangeType::Both}};
   const static LaneChangeMap PedestrianChangeType{
       {{AttributeValueString::Curbstone, AttributeValueString::Low}, LaneChangeType::Both}};
 
@@ -243,6 +244,11 @@ bool GenericTrafficRules::canPass(const ConstArea& from, const ConstArea& to) co
     return false;
   }
   return canChangeToLeft(laneChangeType(*line, true));
+}
+
+bool GenericTrafficRules::canCrossBoundary(const ConstLineString3d& boundary, bool towardsLeft) const {
+  auto type = laneChangeType(boundary, /*virtualIsPassable=*/false);
+  return towardsLeft ? canChangeToLeft(type) : canChangeToRight(type);
 }
 
 bool GenericTrafficRules::canChangeLane(const ConstLanelet& from, const ConstLanelet& to) const {
