@@ -39,7 +39,9 @@ The possible relations are:
 
 ### Lane change across a bicycle lane
 
-When a `subtype=bicycle_lane` lanelet sits between two passable lanelets and **both** of its bounds allow a lane change in that direction, the vehicle routing graph connects those passable lanelets with a `left` / `right` relation. The bicycle lane itself is not a vertex of the vehicle graph (`canPass` is false for vehicles).
+This is an opt-in feature: pass `RoutingGraph::Configuration{{RoutingGraph::AllowLaneChangeAcrossBicycleLane, true}}` to `RoutingGraph::build`. It is disabled by default so that existing routing graphs are unaffected by upgrading.
+
+When enabled and a `subtype=bicycle_lane` lanelet sits between two passable lanelets and **both** of its bounds allow a lane change in that direction, the vehicle routing graph connects those passable lanelets with a `left` / `right` relation. The bicycle lane itself is not a vertex of the vehicle graph (`canPass` is false for vehicles).
 
 Boundary crossing uses the usual vehicle marking table:
 

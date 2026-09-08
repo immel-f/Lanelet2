@@ -97,7 +97,9 @@ RoutingGraphUPtr RoutingGraphBuilder::build(const LaneletMapLayers& laneletMapLa
   auto passableLanelets = getPassableLanelets(laneletMapLayers.laneletLayer, trafficRules_);
   auto passableAreas = getPassableAreas(laneletMapLayers.areaLayer, trafficRules_);
   auto passableMap = utils::createConstSubmap(passableLanelets, passableAreas);
-  indexNonPassableBicycleLanes(laneletMapLayers.laneletLayer, passableLanelets);
+  if (allowLaneChangeAcrossBicycleLane()) {
+    indexNonPassableBicycleLanes(laneletMapLayers.laneletLayer, passableLanelets);
+  }
   appendBidirectionalLanelets(passableLanelets);
   addLaneletsToGraph(passableLanelets);
   addAreasToGraph(passableAreas);
@@ -331,6 +333,14 @@ Optional<double> RoutingGraphBuilder::participantHeight() const {
     return height->second.asDouble();
   }
   return {};
+}
+
+bool RoutingGraphBuilder::allowLaneChangeAcrossBicycleLane() const {
+  auto flag = config_.find(RoutingGraph::AllowLaneChangeAcrossBicycleLane);
+  if (flag != config_.end()) {
+    return flag->second.asBool().get_value_or(false);
+  }
+  return false;
 }
 
 void RoutingGraphBuilder::indexNonPassableBicycleLanes(const LaneletLayer& allLanelets,

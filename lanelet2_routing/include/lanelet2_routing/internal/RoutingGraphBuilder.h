@@ -54,6 +54,9 @@ class RoutingGraphBuilder {
   //! Helper function to read the participant height from the configuration
   Optional<double> participantHeight() const;
 
+  //! Helper function to read whether lane changes across a bicycle lane are enabled from the configuration
+  bool allowLaneChangeAcrossBicycleLane() const;
+
   //! Adds the first and last points of a lanelet to the search index
   void addPointsToSearchIndex(const ConstLanelet& ll);
   bool hasEdge(const ConstLanelet& from, const ConstLanelet& to);

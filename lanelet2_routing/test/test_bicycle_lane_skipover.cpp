@@ -66,9 +66,13 @@ SkipOverMap makeSkipOverMap(const BoundSpec& bikeRight, const BoundSpec& bikeLef
   return result;
 }
 
-RoutingGraphUPtr buildVehicleGraph(const LaneletMap& map) {
+RoutingGraphUPtr buildVehicleGraph(const LaneletMap& map, bool allowSkipOver = true) {
   auto rules = traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle);
-  return RoutingGraph::build(map, *rules);
+  RoutingGraph::Configuration config;
+  if (allowSkipOver) {
+    config.emplace(RoutingGraph::AllowLaneChangeAcrossBicycleLane, true);
+  }
+  return RoutingGraph::build(map, *rules, defaultRoutingCosts(), config);
 }
 
 RoutingGraphUPtr buildBicycleGraph(const LaneletMap& map) {
@@ -91,6 +95,21 @@ const BoundSpec kDashedWithLaneChangeNo{AttributeValueString::BikeMarking, Attri
                                         Optional<bool>{false}};
 
 }  // namespace
+
+TEST(BicycleLaneSkipOver, disabledByDefault) {  // NOLINT
+  auto map = makeSkipOverMap(kDashedBikeMarking, kDashedBikeMarking);
+  auto rules = traffic_rules::TrafficRulesFactory::create(Locations::Germany, Participants::Vehicle);
+  auto graph = RoutingGraph::build(*map.map, *rules);  // no config passed -> feature must stay off
+  EXPECT_FALSE(!!graph->left(map.v1));
+  EXPECT_FALSE(!!graph->right(map.v2));
+}
+
+TEST(BicycleLaneSkipOver, explicitlyDisabledViaConfig) {  // NOLINT
+  auto map = makeSkipOverMap(kDashedBikeMarking, kDashedBikeMarking);
+  auto graph = buildVehicleGraph(*map.map, /*allowSkipOver=*/false);
+  EXPECT_FALSE(!!graph->left(map.v1));
+  EXPECT_FALSE(!!graph->right(map.v2));
+}
 
 TEST(BicycleLaneSkipOver, dashedBikeMarkingAllowsVehicleSkip) {  // NOLINT
   auto map = makeSkipOverMap(kDashedBikeMarking, kDashedBikeMarking);
