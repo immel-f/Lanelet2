@@ -125,6 +125,10 @@ T sort(const T& toSort) {
 }  // namespace
 TrafficRules::~TrafficRules() = default;
 
+bool TrafficRules::canCrossBoundary(const ConstLineString3d& /*boundary*/, bool /*towardsLeft*/) const {
+  return false;
+}
+
 bool GenericTrafficRules::hasDynamicRules(const ConstLanelet& lanelet) const {
   auto regelems = lanelet.regulatoryElements();
   auto isDynamic = [](const auto& elem) { return elem->attributeOr(AttributeName::Dynamic, false); };
